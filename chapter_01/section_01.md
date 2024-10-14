@@ -41,7 +41,7 @@ o se trata de una libreria la cual no sera llamada directamente.
 Las librerias en Rust tienen  muchos puntos de entrada, pero un programa
 en Rust solo uno, a traves de la principal `main`.
 
-El mínimo código necesario para compilar un programq de Rust es: 
+El mínimo código necesario para compilar un programa de Rust es: 
 
 ```rust
 fn main(){}
@@ -99,7 +99,7 @@ es decir, una función `main`, sin parámetros con las llaves sin regresar nada.
 
 Con ello tenemos el código más pequeño que podemos crear en Rust.
 
-Hay que tenemos siempre nuestra funcion `main`, en caso de no contar con la función `main` tendriamos un error como el siguiente:
+Siempre necesitamos una funcion `main`, en caso de no contar con la función `main` tendriamos un error como el siguiente:
 
 ```rust
 Rust-Notes\chapter_01\codes\example_00> cargo run

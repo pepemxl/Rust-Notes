@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title> Video Frame Analysis</title>
+    </head>
+    <body>
+        <video id="video" width="720" height="1280" controls>
+            <source src="/static/video.mp4" type="video/mp4">
+            Your Browser does not support video tag
+        </video>
+        <div>
+            <button id="prevFrame">Previous Frame</button>
+            <button id="nextFrame">Next Frame</button>
+        </div>
+        <script>
+            const video = document.getElementById('video');
+            const prevFrameBtn = document.getElementById('prevFrame');
+            const nextFrameBtn = document.getElementById('nextFrame');
+            const frameRate = 24.75;
+            const frameTime = 1/frameRate;
+            prevFrameBtn.addEventListener('click', ()=>{
+                video.pause();
+                video.currentTime = Math.max(0, video.currentTime - frameTime);
+            });
+            nextFrameBtn.addEventListener('click', ()=>{
+                video.pause();
+                video.currentTime = Math.min(video.duration, video.currentTime + frameTime);
+            });
+        </script>
+    </body>
+</html>

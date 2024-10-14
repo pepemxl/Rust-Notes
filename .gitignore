@@ -14,3 +14,8 @@ chapter_01/codes/example_02/codigo_fuente.pdb
 chapter_01/codes/example_02/codigo_fuente.exe
 chapter_01/codes/example_01/target/debug/example_01.d
 chapter_01/codes/example_01/target/.rustc_info.json
+
+
+
+src/video.mp4
+src/video_player2/static/video.mp4

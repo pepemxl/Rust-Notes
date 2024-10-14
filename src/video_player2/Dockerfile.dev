@@ -1,0 +1,11 @@
+FROM rust:latest AS builder
+
+WORKDIR /usr/src/video_player
+
+RUN apt-get update && apt-get install -y libssl-dev pkg-config
+
+RUN cargo install cargo-watch
+
+CMD ["cargo", "run", "--bin", "video_player"]
+
+EXPOSE 8080
