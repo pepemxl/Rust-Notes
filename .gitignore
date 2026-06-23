@@ -23,3 +23,5 @@ src/video_player2/static/*.mp4
 
 # MkDocs build output
 /site/
+
+/LOCAL_DATA/*

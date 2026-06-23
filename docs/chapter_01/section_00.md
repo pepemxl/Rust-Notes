@@ -43,19 +43,32 @@ cargo install cargo-nextest   # Test runner ultra-rápido (cargo nextest run)
 
 ### 📝 Ejercicios Obligatorios: **Rustlings** (Curso interactivo oficial)
 ```bash
-git clone https://github.com/rust-lang/rustlings
+# Instalación recomendada (nueva versión)
+cargo install rustlings
+rustlings init   # Crea la carpeta del curso con los ejercicios
 cd rustlings
-rustup override set stable # Asegura toolchain
-cargo install --path .
-rustlings watch # Modo interactivo: edita -> guarda -> test auto
+rustlings        # Modo interactivo (watch): edita -> guarda -> test auto
 ```
+
+> **⚠️ Cambio importante en la nueva versión:** ahora basta con ejecutar `rustlings`
+> (sin subcomando) para entrar al **modo interactivo/watch** directamente. Como `watch`
+> es el flujo principal de trabajo, lo convirtieron en el comportamiento por defecto.
+
+**Equivalencias entre versiones:**
+
+| Versión antigua | Versión nueva |
+| :--- | :--- |
+| `rustlings watch` | `rustlings` |
+| `rustlings run <ejercicio>` | `rustlings run <ejercicio>` (igual) |
+| `rustlings hint <ejercicio>` | `rustlings hint <ejercicio>` (igual) |
+
 **Completa estos ejercicios (Carpeta `exercises/`):**
 1.  `variables/` (mut, shadowing, const, scope)
 2.  `functions/` (params, returns, statements vs expressions, divergent `!`)
 3.  `if/` (expresiones if, else if, let else - *preview*)
 4.  `primitive_types/` (tuples, arrays, slices intro, string literals vs String)
 
-> **💡 Truco:** Si te atascas > 10 min: `rustlings hint exercise_name`. Lee el error del compilador *antes* de la pista.
+> **💡 Truco:** Si te atascas > 10 min: `rustlings hint <ejercicio>`. Lee el error del compilador *antes* de la pista.
 
 ### 🧪 Mini-Reto: "Hola Cargo Avanzado"
 Crea un proyecto `cargo new hello_cargo`.

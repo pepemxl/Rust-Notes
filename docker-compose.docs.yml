@@ -1,0 +1,28 @@
+services:
+  docs:
+    build:
+      context: .
+      dockerfile: Dockerfile.docs
+    image: rust-notes-docs
+    container_name: rust-notes-docs
+    ports:
+      - "8000:8000"
+    volumes:
+      # Live reload: edits to config/content are picked up without rebuilding
+      - ./docs:/docs/docs
+      - ./mkdocs.yml:/docs/mkdocs.yml
+    command: mkdocs serve --dev-addr=0.0.0.0:8000
+
+  # One-shot service to render the static site into ./site
+  build:
+    build:
+      context: .
+      dockerfile: Dockerfile.docs
+    image: rust-notes-docs
+    volumes:
+      - ./docs:/docs/docs
+      - ./mkdocs.yml:/docs/mkdocs.yml
+      - ./site:/docs/site
+    command: mkdocs build --strict --site-dir /docs/site
+    profiles:
+      - build
