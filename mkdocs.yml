@@ -1,0 +1,83 @@
+site_name: Rust Notes
+site_description: Notas del curso de Rust — 6 meses de estudio
+site_author: Jose Alonzo
+docs_dir: docs
+use_directory_urls: true
+
+theme:
+  name: material
+  language: es
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/weather-night
+        name: Cambiar a modo oscuro
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/weather-sunny
+        name: Cambiar a modo claro
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search:
+      lang: es
+
+nav:
+  - Inicio: index.md
+  - Introducción:
+      - chapter_00/section_01.md
+  - Mes 1 — Fundamentos:
+      - chapter_01/section_00.md
+      - Instalación y primeros pasos: chapter_01/section_01.md
+      - Aritmética en Rust: chapter_01/section_02.md
+  - Mes 2 — Genéricos y Traits:
+      - chapter_02/section_00.md
+  - Mes 3 — Async y Web:
+      - chapter_03/section_00.md
+  - Mes 4 — Sistemas, CLI y WASM:
+      - chapter_04/section_00.md
+  - Mes 5 — Arquitectura y Rendimiento:
+      - chapter_05/section_00.md
+  - Mes 6 — Proyecto Capstone:
+      - chapter_06/section_00.md

@@ -20,3 +20,6 @@ chapter_01/codes/example_01/target/.rustc_info.json
 
 src/video.mp4
 src/video_player2/static/*.mp4
+
+# MkDocs build output
+/site/
