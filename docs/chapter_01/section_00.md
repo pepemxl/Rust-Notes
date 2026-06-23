@@ -395,6 +395,198 @@ todo_cli/
 
 ---
 
+## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+
+> Todos los ejemplos de esta sección **compilan con `rustc 1.81` (edición 2021)** salvo los marcados con `// ❌ NO COMPILA`, que son errores *intencionales* para que leas el mensaje del compilador. Copialos en un `cargo new` y juega con ellos.
+
+### 1️⃣ Ownership & Move (la regla del único dueño)
+
+```rust
+fn main() {
+    let s1 = String::from("hola");
+    let s2 = s1;            // MOVE: el dato del heap NO se copia, s1 queda invalidado
+    println!("{s2}");       // ✅ OK
+
+    // println!("{s1}");    // ❌ NO COMPILA: "borrow of moved value: `s1`"
+
+    let s3 = s2.clone();    // CLONE: deep copy, nuevo heap. s2 y s3 son válidos
+    println!("{s2} y {s3}");
+
+    let x = 5;
+    let y = x;              // COPY: i32 implementa Copy -> copia bit a bit
+    println!("{x} y {y}");  // ✅ x sigue siendo válido
+}
+```
+
+**Idea clave:** `String` posee memoria en el *heap*, por eso se **mueve**. `i32` vive entero en el *stack*, por eso se **copia**. El compilador elige automáticamente según si el tipo implementa `Copy`.
+
+### 2️⃣ Borrowing: `&T` vs `&mut T`
+
+```rust
+fn longitud(s: &String) -> usize { s.len() }   // préstamo inmutable: solo lee
+fn agregar(s: &mut String) { s.push_str(" mundo"); } // préstamo mutable: escribe
+
+fn main() {
+    let mut s = String::from("hola");
+    let n = longitud(&s);   // presto para leer
+    agregar(&mut s);        // presto para escribir
+    println!("{s} (longitud previa: {n})"); // "hola mundo (longitud previa: 4)"
+}
+```
+
+La regla del *borrow checker* — **`&T` XOR `&mut T`** — en acción:
+
+```rust
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let primero = &v[0];     // préstamo inmutable activo
+    v.push(4);               // ❌ NO COMPILA: ya hay un &v vivo, push necesita &mut v
+    println!("{primero}");
+}
+// Solución: acorta el scope del préstamo (usa `primero` antes de `push`,
+// o clona el valor barato: let primero = v[0];)
+```
+
+### 3️⃣ Slices (`&str`, `&[T]`): vistas sin ownership
+
+```rust
+/// Devuelve la primera palabra de `s` sin copiar nada (solo una vista).
+fn primera_palabra(s: &str) -> &str {
+    for (i, c) in s.char_indices() {
+        if c == ' ' { return &s[..i]; }
+    }
+    s
+}
+
+fn main() {
+    let frase = String::from("hola mundo cruel");
+    let palabra = primera_palabra(&frase); // &String coacciona a &str (Deref)
+    println!("{palabra}");                 // "hola"
+
+    let nums = [10, 20, 30, 40];
+    let medio: &[i32] = &nums[1..3];       // slice de array
+    println!("{:?}", medio);               // [20, 30]
+}
+```
+
+### 4️⃣ Structs + métodos (`impl`)
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+struct Rect { ancho: u32, alto: u32 }
+
+impl Rect {
+    fn nuevo(ancho: u32, alto: u32) -> Self { Self { ancho, alto } } // constructor asociado
+    fn area(&self) -> u32 { self.ancho * self.alto }                 // método (toma &self)
+    fn es_cuadrado(&self) -> bool { self.ancho == self.alto }
+}
+
+fn main() {
+    let r = Rect::nuevo(3, 4);
+    println!("area = {}, cuadrado = {}", r.area(), r.es_cuadrado());
+    println!("{r:?}");          // Debug: Rect { ancho: 3, alto: 4 }
+}
+```
+
+### 5️⃣ Enums + `match` + `Option<T>`
+
+```rust
+#[derive(Debug)]
+enum Forma {
+    Circulo(f64),
+    Rectangulo(f64, f64),
+}
+
+fn area(f: &Forma) -> f64 {
+    match f {                                          // match exhaustivo
+        Forma::Circulo(r) => std::f64::consts::PI * r * r,
+        Forma::Rectangulo(a, b) => a * b,
+    }
+}
+
+/// Devuelve el índice del objetivo, o `None` si no está.
+fn buscar(v: &[i32], objetivo: i32) -> Option<usize> {
+    for (i, &x) in v.iter().enumerate() {
+        if x == objetivo { return Some(i); }
+    }
+    None
+}
+
+fn main() {
+    println!("{:.2}", area(&Forma::Circulo(2.0)));     // 12.57
+    match buscar(&[10, 20, 30], 20) {
+        Some(i) => println!("encontrado en {i}"),      // encontrado en 1
+        None => println!("no está"),
+    }
+}
+```
+
+### 6️⃣ Colecciones: el patrón *entry API* de `HashMap`
+
+```rust
+use std::collections::HashMap;
+
+/// Cuenta cuántas veces aparece cada palabra.
+fn contar_palabras(texto: &str) -> HashMap<&str, u32> {
+    let mut conteo = HashMap::new();
+    for palabra in texto.split_whitespace() {
+        *conteo.entry(palabra).or_insert(0) += 1; // entry: 1 solo hash, inserta-o-actualiza
+    }
+    conteo
+}
+
+fn main() {
+    let c = contar_palabras("rust es rust y rust mola");
+    println!("{}", c["rust"]); // 3
+}
+```
+
+### 7️⃣ Manejo de errores: tipo propio + `From` + operador `?`
+
+```rust
+use std::fmt;
+
+#[derive(Debug)]
+enum AppError {
+    Vacio,
+    NoNumerico(std::num::ParseIntError),
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AppError::Vacio => write!(f, "la entrada está vacía"),
+            AppError::NoNumerico(e) => write!(f, "no es un número: {e}"),
+        }
+    }
+}
+impl std::error::Error for AppError {}
+
+// Esta impl es lo que permite que `?` convierta el error automáticamente.
+impl From<std::num::ParseIntError> for AppError {
+    fn from(e: std::num::ParseIntError) -> Self { AppError::NoNumerico(e) }
+}
+
+fn parsear(s: &str) -> Result<i32, AppError> {
+    if s.is_empty() { return Err(AppError::Vacio); }
+    let n: i32 = s.trim().parse()?; // ParseIntError -> AppError gracias a From
+    Ok(n)
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("{}", parsear("42")?);        // 42
+    println!("{:?}", parsear(""));         // Err(Vacio)
+    println!("{:?}", parsear("x"));        // Err(NoNumerico(...))
+    Ok(())
+}
+```
+
+> **Conexión con el resto del capítulo:** la sintaxis básica (impresión, números, comentarios) está en
+> [Instalación y primeros pasos](section_01.md) y [Aritmética en Rust](section_02.md). Aquí cubrimos el
+> **núcleo conceptual** (ownership, borrowing, ADTs, errores) que distingue a Rust de C/C++.
+
+---
+
 ## ✅ CHECKLIST FINAL MES 1 (¿Estás listo para Mes 2?)
 
 - [ ] **Entorno:** `rustup`, `cargo-watch`, `clippy`, `rust-analyzer` funcionando. `cargo fmt` en save.
