@@ -699,6 +699,166 @@ jobs:
 
 ---
 
+## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+
+> Los ejemplos de las secciones **1–5 compilan con `rustc 1.81` (edición 2021) usando SOLO `std`** — sin Tokio ni crates externas. Son la versión mínima y verificable de lo que el runtime hace por dentro, perfectos para conectar con el ejercicio *Toykio* de la Semana 9. Las secciones 6–7 (Tokio/Axum) requieren las dependencias del proyecto y se muestran como referencia idiomática.
+
+### 1️⃣ Una `Future` hecha a mano
+
+```rust
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+/// La future más simple posible: lista en el primer `poll`.
+struct Listo(i32);
+
+impl Future for Listo {
+    type Output = i32;
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<i32> {
+        Poll::Ready(self.0)   // nunca devuelve Pending
+    }
+}
+```
+
+> Una `Future` es **perezosa**: no hace nada hasta que alguien la *pollea*. Sin un executor que llame a `poll`, el código `async` jamás avanza.
+
+### 2️⃣ Una future con estado: `Pending` antes de `Ready`
+
+```rust
+/// Devuelve `Pending` N veces y luego `Ready`. En cada `Pending` se
+/// re-agenda a sí misma despertando su waker (lo que haría un timer real).
+struct Cuenta { restante: u32 }
+
+impl Future for Cuenta {
+    type Output = &'static str;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<&'static str> {
+        if self.restante == 0 {
+            Poll::Ready("listo")
+        } else {
+            self.restante -= 1;
+            cx.waker().wake_by_ref(); // "vuelve a pollearme cuando puedas"
+            Poll::Pending
+        }
+    }
+}
+```
+
+> **`Pending` + `Waker` es el corazón de async.** La future no bloquea: devuelve `Pending` y guarda (o usa) el `Waker` para avisar al executor cuando vuelva a tener trabajo.
+
+### 3️⃣ `block_on`: un mini-executor de un solo hilo (solo `std`)
+
+```rust
+use std::sync::Arc;
+use std::task::{Wake, Waker};
+
+struct TareaWaker;
+impl Wake for TareaWaker {
+    fn wake(self: Arc<Self>) {} // un runtime real re-encolaría la tarea aquí
+}
+
+/// Ejecuta una future hasta el final haciendo *busy-poll*.
+fn block_on<F: Future>(future: F) -> F::Output {
+    let mut future = Box::pin(future);              // Pin<Box<F>>: ya no se moverá
+    let waker = Waker::from(Arc::new(TareaWaker));
+    let mut cx = Context::from_waker(&waker);
+    loop {
+        match future.as_mut().poll(&mut cx) {
+            Poll::Ready(val) => return val,
+            Poll::Pending => continue, // runtime real: aquí DUERME el hilo, no gira
+        }
+    }
+}
+
+fn main() {
+    assert_eq!(block_on(Listo(42)), 42);
+    assert_eq!(block_on(Cuenta { restante: 3 }), "listo");
+    println!("OK");
+}
+```
+
+> Esto es exactamente lo que `#[tokio::main]` hace a gran escala: construye un executor, crea wakers reales (que re-encolan tareas en vez de girar en vacío) y pollea las futures hasta completarlas.
+
+### 4️⃣ `async`/`await`: la *state machine* que genera el compilador
+
+```rust
+async fn obtener_usuario(id: u64) -> u64 { id * 10 }
+async fn obtener_posts(user: u64) -> u32 { (user % 7) as u32 }
+
+async fn flujo(id: u64) -> (u64, u32) {
+    let user = obtener_usuario(id).await;   // ← punto de yield 1
+    let posts = obtener_posts(user).await;  // ← punto de yield 2
+    (user, posts)
+}
+
+// Con el block_on de arriba:
+// assert_eq!(block_on(flujo(5)), (50, 1));
+```
+
+> Cada `.await` es un **punto de suspensión**: el compilador convierte `flujo` en un `enum` de estados (`Start → EsperandoUsuario → EsperandoPosts → Done`). Por eso una future puede ser *self-referential* y necesita `Pin`.
+
+### 5️⃣ `Send` verificado en compile-time
+
+```rust
+use std::sync::{Arc, Mutex};
+
+fn exige_send<T: Send>(_: &T) {} // bound que `tokio::spawn` impone a tu future
+
+fn main() {
+    let compartible = Arc::new(Mutex::new(0));
+    exige_send(&compartible); // ✅ Arc<Mutex<T>> es Send + Sync
+
+    // let local = std::rc::Rc::new(0);
+    // exige_send(&local);     // ❌ NO COMPILA: `Rc<i32>` no es Send
+}
+```
+
+> Regla de oro async: lo que cruce un `.await` dentro de una tarea `spawn` debe ser `Send`. Por eso usas `Arc<tokio::sync::Mutex<T>>` y **nunca** mantienes un `MutexGuard` (o un `Rc`) vivo a través de un `.await`.
+
+### 6️⃣ Handler de Axum con `AppError` → `IntoResponse` *(requiere las deps del proyecto)*
+
+```rust
+use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
+use serde_json::json;
+
+pub enum AppError {
+    NotFound,
+    Invalid(String),
+}
+
+// Esto es lo que convierte tus errores en respuestas HTTP limpias y permite usar `?` en handlers.
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let (status, msg) = match self {
+            AppError::NotFound => (StatusCode::NOT_FOUND, "no encontrado".to_string()),
+            AppError::Invalid(m) => (StatusCode::BAD_REQUEST, m),
+        };
+        (status, Json(json!({ "error": msg }))).into_response()
+    }
+}
+
+// async fn handler(...) -> Result<Json<Algo>, AppError> {
+//     let x = storage.find(...).await.ok_or(AppError::NotFound)?; // `?` mapea a 404
+//     Ok(Json(x))
+// }
+```
+
+### 7️⃣ `select!` para timeout / shutdown concurrente *(Tokio)*
+
+```rust
+// async fn con_timeout() {
+//     tokio::select! {
+//         _ = trabajo_largo()          => println!("terminó el trabajo"),
+//         _ = tokio::time::sleep(d)    => println!("timeout: trabajo cancelado"),
+//     }
+//     // `select!` pollea ambas ramas; la que NO gana se DROPEA (se cancela).
+// }
+```
+
+> `join!` espera a **todas** las futures; `select!` corre hasta que **una** termina y cancela el resto. Es el patrón canónico para *timeouts*, *races* y apagado limpio (`select!` entre el server y una señal `ctrl_c`).
+
+---
+
 ## ✅ CHECKLIST FINAL MES 3 (Definition of Done - "Production Ready")
 
 ### Código & Arquitectura
