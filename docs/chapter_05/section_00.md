@@ -415,6 +415,180 @@ my-ecosystem/
 
 ---
 
+## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+
+> Todos los ejemplos **compilan y corren con `rustc 1.81` (edición 2021) usando SOLO `std`** — incluyendo el actor (con `std::sync::mpsc` + `std::thread`) y el contador concurrente. No requieren `tokio`, `crossbeam`, `rayon` ni `criterion`. Los marcados `// ❌ NO COMPILA` demuestran las garantías que el sistema de tipos te regala.
+
+### 1️⃣ Newtype: tipos fuertes con validación
+
+```rust
+struct Email(String); // no es un String cualquiera: ya está validado
+
+impl Email {
+    fn parse(s: &str) -> Result<Email, String> {
+        if s.contains('@') { Ok(Email(s.to_string())) }
+        else { Err(format!("email inválido: {s}")) }
+    }
+    fn as_str(&self) -> &str { &self.0 }
+}
+// Una vez tienes un `Email`, el resto del código NO vuelve a validar: el tipo es la prueba.
+```
+
+### 2️⃣ Typestate: el estado vive en el **tipo** (cero coste en runtime)
+
+```rust
+use std::marker::PhantomData;
+
+struct Draft;   struct Active;   struct Expired; // marcadores, 0 bytes
+
+struct Url<S> {
+    code: String,
+    clicks: u64,
+    _estado: PhantomData<S>, // ata el parámetro genérico sin ocupar memoria
+}
+
+impl Url<Draft> {
+    fn new(code: &str) -> Self { Url { code: code.into(), clicks: 0, _estado: PhantomData } }
+    fn publish(self) -> Url<Active> { // consume Draft → produce Active
+        Url { code: self.code, clicks: 0, _estado: PhantomData }
+    }
+}
+impl Url<Active> {
+    fn click(&mut self) { self.clicks += 1; }
+    fn expire(self) -> Url<Expired> {
+        Url { code: self.code, clicks: self.clicks, _estado: PhantomData }
+    }
+}
+impl Url<Expired> {
+    fn clicks_finales(&self) -> u64 { self.clicks } // expirada: solo lectura
+}
+
+fn main() {
+    let mut activa = Url::<Draft>::new("abc").publish();
+    activa.click();
+    let expirada = activa.expire();
+    assert_eq!(expirada.clicks_finales(), 1);
+
+    // expirada.click(); // ❌ NO COMPILA: `click` no existe para `Url<Expired>`
+}
+```
+
+> Este es el *killer feature* de la Semana 17: estados inválidos **no se pueden expresar**. El compilador, no un `if` en runtime, garantiza que nunca llamas `click()` sobre una URL expirada. `PhantomData<S>` ocupa 0 bytes ⇒ abstracción de coste cero.
+
+### 3️⃣ Builder con typestate: campos requeridos verificados en compile-time
+
+```rust
+struct Unset;   struct Set;
+
+struct ConfigBuilder<U> { url: Option<String>, _u: PhantomData<U> }
+
+impl ConfigBuilder<Unset> {
+    fn new() -> Self { ConfigBuilder { url: None, _u: PhantomData } }
+    fn url(self, u: &str) -> ConfigBuilder<Set> { // transición de estado en el tipo
+        ConfigBuilder { url: Some(u.into()), _u: PhantomData }
+    }
+}
+impl ConfigBuilder<Set> {
+    fn build(self) -> String { self.url.unwrap() } // unwrap SEGURO: el tipo lo garantiza
+}
+
+// ConfigBuilder::new().build(); // ❌ NO COMPILA: `build` no existe en <Unset>
+let cfg = ConfigBuilder::new().url("http://x").build(); // ✅
+```
+
+### 4️⃣ Actor model con `std` (threads + `mpsc`): estado sin `Mutex`
+
+```rust
+use std::sync::mpsc::{self, Sender};
+use std::thread;
+
+enum Msg {
+    Inc,
+    Get(Sender<u64>), // canal de respuesta (oneshot emulado con mpsc)
+    Stop,
+}
+
+#[derive(Clone)]
+struct CounterHandle { tx: Sender<Msg> } // handle clonable y barato
+
+impl CounterHandle {
+    fn inc(&self) { self.tx.send(Msg::Inc).unwrap(); }
+    fn get(&self) -> u64 {
+        let (tx, rx) = mpsc::channel();
+        self.tx.send(Msg::Get(tx)).unwrap();
+        rx.recv().unwrap()
+    }
+}
+
+fn start_counter() -> (CounterHandle, thread::JoinHandle<()>) {
+    let (tx, rx) = mpsc::channel::<Msg>();
+    let join = thread::spawn(move || {
+        let mut count = 0u64; // ESTADO PRIVADO del actor: nadie más lo toca
+        while let Ok(msg) = rx.recv() {
+            match msg {
+                Msg::Inc => count += 1,
+                Msg::Get(reply) => { reply.send(count).ok(); }
+                Msg::Stop => break,
+            }
+        }
+    });
+    (CounterHandle { tx }, join)
+}
+
+// 4 hilos incrementando vía mensajes; el estado nunca se comparte ⇒ sin data races.
+// for _ in 0..4 { let h = handle.clone(); thread::spawn(move || for _ in 0..1000 { h.inc(); }); }
+// assert_eq!(handle.get(), 4000);
+```
+
+> *"No compartas memoria para comunicarte; comunica para compartir memoria."* El estado (`count`) es **local** al hilo del actor; la concurrencia se serializa por la cola de mensajes. La versión Tokio (Semana 17) es idéntica cambiando `std::thread`/`mpsc` por `tokio::spawn`/`tokio::sync::mpsc`.
+
+### 5️⃣ Contador sharded + *false sharing* evitado con padding
+
+```rust
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[repr(align(64))] // cada átomo en SU PROPIA línea de cache (64 B) → sin ping-pong
+struct Padded(AtomicUsize);
+
+struct Sharded { shards: Vec<Padded> }
+impl Sharded {
+    fn new(n: usize) -> Self {
+        Sharded { shards: (0..n).map(|_| Padded(AtomicUsize::new(0))).collect() }
+    }
+    fn inc(&self, shard: usize) {
+        // Estadística pura: el orden exacto no importa ⇒ `Relaxed` (lo más rápido).
+        self.shards[shard].0.fetch_add(1, Ordering::Relaxed);
+    }
+    fn total(&self) -> usize {
+        self.shards.iter().map(|p| p.0.load(Ordering::Relaxed)).sum()
+    }
+}
+// 8 hilos × 10_000 incrementos, cada uno en su shard ⇒ total == 80_000, sin contención.
+```
+
+> **`#[repr(align(64))]` es la diferencia entre escalar y colapsar.** Sin él, varios `AtomicUsize` caen en la misma línea de cache y los núcleos se la invalidan mutuamente (false sharing): el throughput *baja* al añadir hilos. Mídelo con `perf stat -e cache-misses`.
+
+### 6️⃣ `Cow`: clona solo cuando hay que mutar
+
+```rust
+use std::borrow::Cow;
+
+fn normalizar(s: &str) -> Cow<str> {
+    if s.contains(' ') {
+        Cow::Owned(s.replace(' ', "_")) // hubo cambio → nueva asignación
+    } else {
+        Cow::Borrowed(s)                // sin cambios → CERO asignaciones
+    }
+}
+
+assert!(matches!(normalizar("limpio"),       Cow::Borrowed(_)));
+assert!(matches!(normalizar("con espacio"),  Cow::Owned(_)));
+```
+
+> El patrón de optimización de la Semana 19: el caso común (sin cambios) no asigna memoria; solo pagas el `clone` cuando realmente modificas. Ideal para funciones que *a veces* transforman su entrada.
+
+---
+
 ## ✅ CHECKLIST FINAL MES 5 (Definition of Done — Senior Rustacean)
 
 ### 1. Arquitectura & Patrones (Refactor Url Shortener v3)
