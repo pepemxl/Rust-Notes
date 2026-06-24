@@ -664,6 +664,229 @@ jobs:
 
 ---
 
+## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+
+> Todos los ejemplos **compilan con `rustc 1.81` (edición 2021)**. Los marcados con `// ❌ NO COMPILA` son errores *intencionales*: léelos como una lección sobre lo que el compilador te impide hacer.
+
+### 1️⃣ Generics + trait bounds + monomorphization
+
+```rust
+/// Genérico sobre cualquier `T` comparable y copiable.
+fn mayor<T: PartialOrd + Copy>(lista: &[T]) -> T {
+    let mut m = lista[0];
+    for &x in &lista[1..] {
+        if x > m { m = x; }
+    }
+    m
+}
+
+struct Punto<T> { x: T, y: T }
+
+// El bound va en el `impl`, no en la definición del struct.
+impl<T: std::ops::Add<Output = T> + Copy> Punto<T> {
+    fn suma_coords(&self) -> T { self.x + self.y }
+}
+
+fn main() {
+    println!("{}", mayor(&[3, 7, 2, 9, 1]));   // 9  (instancia <i32>)
+    println!("{}", mayor(&[1.5, 0.2, 9.9]));    // 9.9 (instancia <f64>)
+    println!("{}", Punto { x: 2, y: 5 }.suma_coords()); // 7
+}
+```
+
+> **Monomorphization:** el compilador genera una copia de `mayor` por cada tipo concreto usado (`mayor::<i32>`, `mayor::<f64>`). Cero coste en runtime; el precio se paga en tiempo de compilación y tamaño del binario.
+
+### 2️⃣ `impl Trait` en argumento y en retorno
+
+```rust
+use std::fmt::Display;
+
+// Argumento: azúcar para `fn imprime<T: Display>(item: T)`
+fn imprime(item: impl Display) { println!("{item}"); }
+
+// Retorno: tipo concreto *opaco*. El caller solo sabe que es un Iterator.
+fn pares_hasta(n: u32) -> impl Iterator<Item = u32> {
+    (0..n).filter(|x| x % 2 == 0)
+}
+
+fn main() {
+    imprime("hola");
+    imprime(42);
+    let v: Vec<u32> = pares_hasta(6).collect();
+    println!("{v:?}"); // [0, 2, 4]
+}
+```
+
+⚠️ No puedes devolver **tipos distintos** en ramas `if/else` con `-> impl Trait`:
+
+```rust
+fn animal(perro: bool) -> impl std::fmt::Display {
+    if perro { "guau" } else { 42 } // ❌ NO COMPILA: &str vs i32 son tipos distintos
+}
+// Solución: -> Box<dyn Display> (dynamic dispatch).
+```
+
+### 3️⃣ Lifetimes en funciones y structs
+
+```rust
+/// El resultado vive tanto como el más corto de los dos inputs.
+fn mas_largo<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() >= b.len() { a } else { b }
+}
+
+/// Struct que contiene una referencia: requiere parámetro de lifetime.
+struct Extracto<'a> { parte: &'a str }
+
+impl<'a> Extracto<'a> {
+    // Por la 3.ª regla de elisión, no hace falta anotar el output.
+    fn primera_frase(&self) -> &str {
+        self.parte.split('.').next().unwrap_or("")
+    }
+}
+
+fn main() {
+    println!("{}", mas_largo("abcd", "xy")); // abcd
+    let texto = String::from("Hola mundo. Segunda frase.");
+    let e = Extracto { parte: &texto };
+    println!("{}", e.primera_frase()); // Hola mundo
+} // `texto` vive más que `e`: el borrow checker está contento
+```
+
+### 4️⃣ `From` / `Into` (conversiones infalibles)
+
+```rust
+struct Celsius(f64);
+struct Fahrenheit(f64);
+
+// Implementa SOLO From; Into se obtiene gratis por blanket impl.
+impl From<Celsius> for Fahrenheit {
+    fn from(c: Celsius) -> Self { Fahrenheit(c.0 * 9.0 / 5.0 + 32.0) }
+}
+
+fn main() {
+    let f = Fahrenheit::from(Celsius(100.0));
+    println!("{}", f.0);                  // 212
+    let f2: Fahrenheit = Celsius(0.0).into(); // .into() funciona gracias al From
+    println!("{}", f2.0);                 // 32
+}
+```
+
+### 5️⃣ `Deref` y el patrón *newtype*
+
+```rust
+use std::ops::Deref;
+
+struct Pila(Vec<i32>); // newtype: envuelve un Vec
+
+impl Deref for Pila {
+    type Target = [i32];
+    fn deref(&self) -> &[i32] { &self.0 }
+}
+
+fn main() {
+    let pila = Pila(vec![1, 2, 3]);
+    // Deref coercion: métodos de [i32] disponibles directamente
+    println!("{}", pila.len());                 // 3
+    println!("{}", pila.iter().sum::<i32>());   // 6
+}
+```
+
+> **Regla de oro:** `Deref` debe ser barato e infalible (nunca devuelve `Result`). Es para *smart pointers* y newtypes, no para conversiones con lógica.
+
+### 6️⃣ `dyn Trait`: dispatch dinámico y colecciones heterogéneas
+
+```rust
+trait Animal { fn sonido(&self) -> String; }
+
+struct Perro;
+struct Gato;
+impl Animal for Perro { fn sonido(&self) -> String { "guau".into() } }
+impl Animal for Gato  { fn sonido(&self) -> String { "miau".into() } }
+
+fn main() {
+    // Vec heterogéneo: solo posible con trait objects (VTable, no monomorphization).
+    let zoo: Vec<Box<dyn Animal>> = vec![Box::new(Perro), Box::new(Gato)];
+    for a in &zoo {
+        println!("{}", a.sonido()); // guau / miau
+    }
+}
+```
+
+### 7️⃣ `Rc<RefCell<T>>` + `Weak`: árbol sin fugas de memoria
+
+```rust
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+
+struct Nodo {
+    valor: i32,
+    hijos: RefCell<Vec<Rc<Nodo>>>, // padre -> hijo: Strong (owner)
+    padre: RefCell<Weak<Nodo>>,    // hijo -> padre: Weak (NO owner, rompe el ciclo)
+}
+
+fn main() {
+    let padre = Rc::new(Nodo {
+        valor: 1,
+        hijos: RefCell::new(vec![]),
+        padre: RefCell::new(Weak::new()),
+    });
+    let hijo = Rc::new(Nodo {
+        valor: 2,
+        hijos: RefCell::new(vec![]),
+        padre: RefCell::new(Rc::downgrade(&padre)), // enlace débil al padre
+    });
+    padre.hijos.borrow_mut().push(Rc::clone(&hijo));
+
+    // El enlace hijo->padre es Weak, así que NO infla el strong_count del padre:
+    println!("strong padre = {}", Rc::strong_count(&padre)); // 1
+    println!("strong hijo  = {}", Rc::strong_count(&hijo));  // 2
+
+    // upgrade(): Weak -> Option<Rc>. Some mientras el padre siga vivo.
+    let abuelo = hijo.padre.borrow().upgrade();
+    println!("valor del padre = {}", abuelo.unwrap().valor); // 1
+}
+```
+
+> Si `padre` y `hijo` se apuntaran mutuamente con `Rc` (Strong), el contador nunca llegaría a 0 → **fuga de memoria**. `Weak` es lo que lo evita.
+
+### 8️⃣ Testing con mock vía trait (inyección de dependencias)
+
+```rust
+pub trait Reloj { fn ahora(&self) -> u64; }
+
+pub struct RelojReal;
+impl Reloj for RelojReal {
+    fn ahora(&self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+    }
+}
+
+pub fn ha_expirado(reloj: &dyn Reloj, creado_en: u64, ttl: u64) -> bool {
+    reloj.ahora() >= creado_en + ttl
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct RelojFijo(u64); // mock determinista
+    impl Reloj for RelojFijo {
+        fn ahora(&self) -> u64 { self.0 }
+    }
+
+    #[test]
+    fn expira_tras_ttl() {
+        assert!(!ha_expirado(&RelojFijo(105), 100, 10)); // dentro del TTL
+        assert!(ha_expirado(&RelojFijo(115), 100, 10));  // fuera del TTL
+    }
+}
+```
+
+> Esta es la técnica que hace **deterministas** los tests del ejercicio `Cache<K, V>` de la Semana 5: abstraes el tiempo (o cualquier dependencia: red, disco) tras un trait y le pasas un mock en los tests.
+
+---
+
 ## ✅ CHECKLIST FINAL MES 2 (Definition of Done)
 
 - [ ] **Generics & Bounds:** Escribes `fn foo<T: Trait>(x: T)` y `fn bar() -> impl Trait` naturalmente. Entiendes monomorphization.
