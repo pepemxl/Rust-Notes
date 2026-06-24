@@ -292,6 +292,185 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 
 ---
 
+## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+
+> Las secciones **1–4 compilan y corren con `rustc 1.81` (edición 2021) usando SOLO `std`** (incluyendo el actor de shutdown con `std::thread` + `mpsc`). Modelan, en pequeño, las decisiones de ingeniería del capstone: **arquitectura hexagonal**, **modelo de errores HTTP**, **readiness** y **apagado limpio**. Las secciones 5–6 (Axum / utoipa / tonic) requieren las crates del proyecto y van como referencia idiomática.
+
+### 1️⃣ Ports & Adapters: el corazón de la separación `core` / `db` / `server`
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+struct Event { id: u64, project: String, payload: String }
+
+#[derive(Debug, PartialEq)]
+enum StoreError { Duplicate(u64) }
+
+/// PORT: vive en `core` y NO sabe nada de Postgres/Redis/HTTP.
+trait EventStore {
+    fn save(&mut self, e: Event) -> Result<(), StoreError>;
+    fn count(&self, project: &str) -> usize;
+}
+
+/// Caso de uso (servicio): depende del PORT (trait), no de la implementación.
+fn ingest(store: &mut impl EventStore, id: u64, project: &str, payload: &str)
+    -> Result<u64, DomainError>
+{
+    if payload.is_empty() {
+        return Err(DomainError::Validation("payload vacío".into()));
+    }
+    store.save(Event { id, project: project.into(), payload: payload.into() })
+        .map_err(|StoreError::Duplicate(d)| DomainError::Conflict(d))?;
+    Ok(id)
+}
+
+/// ADAPTER en memoria (para tests). En el capstone, `crates/db` provee el de Postgres.
+struct InMemoryStore { events: Vec<Event> }
+impl EventStore for InMemoryStore {
+    fn save(&mut self, e: Event) -> Result<(), StoreError> {
+        if self.events.iter().any(|x| x.id == e.id) {
+            return Err(StoreError::Duplicate(e.id));
+        }
+        self.events.push(e);
+        Ok(())
+    }
+    fn count(&self, project: &str) -> usize {
+        self.events.iter().filter(|e| e.project == project).count()
+    }
+}
+```
+
+> La lógica de negocio (`ingest`) **no depende de la base de datos**: depende del trait `EventStore`. Por eso `crates/core` se testea sin Postgres (adapter en memoria) y `crates/db` solo implementa el port. Es exactamente la regla "core no depende de db" del Mes 5/6.
+
+### 2️⃣ Error de dominio → HTTP + RFC 9457 (Problem Details)
+
+```rust
+#[derive(Debug)]
+enum DomainError { Validation(String), Conflict(u64), NotFound }
+
+struct ProblemDetails { status: u16, title: &'static str, detail: String }
+
+impl DomainError {
+    fn to_problem(&self) -> ProblemDetails {
+        match self {
+            DomainError::Validation(m) => ProblemDetails { status: 422, title: "Unprocessable Entity", detail: m.clone() },
+            DomainError::Conflict(id)  => ProblemDetails { status: 409, title: "Conflict", detail: format!("id {id} ya existe") },
+            DomainError::NotFound      => ProblemDetails { status: 404, title: "Not Found", detail: "recurso no existe".into() },
+        }
+    }
+}
+
+impl ProblemDetails {
+    /// Cuerpo `application/problem+json` (RFC 9457).
+    fn to_json(&self) -> String {
+        format!(
+            r#"{{"type":"about:blank","title":"{}","status":{},"detail":"{}"}}"#,
+            self.title, self.status, self.detail
+        )
+    }
+}
+// DomainError::Conflict(7).to_problem().status == 409
+```
+
+> Un único mapeo `error de dominio → (status, cuerpo)` mantiene la API consistente. En el `server` esto se conecta a `impl IntoResponse for DomainError` (sección 5) para que los handlers usen `?` y devuelvan errores HTTP correctos automáticamente.
+
+### 3️⃣ Readiness: agregación de health checks (`/ready`)
+
+```rust
+trait HealthCheck {
+    fn name(&self) -> &str;
+    fn check(&self) -> Result<(), String>;
+}
+
+/// 200 solo si TODOS los checks pasan; si alguno falla → 503 (K8s lo saca del Service).
+fn readiness(checks: &[&dyn HealthCheck]) -> (u16, Vec<(String, bool)>) {
+    let mut detalle = Vec::new();
+    let mut todos_ok = true;
+    for c in checks {
+        let ok = c.check().is_ok();
+        todos_ok &= ok;
+        detalle.push((c.name().to_string(), ok));
+    }
+    (if todos_ok { 200 } else { 503 }, detalle)
+}
+```
+
+> Diferencia clave del checklist: `/health` (liveness) responde 200 si el proceso vive; `/ready` (readiness) agrega dependencias reales (DB pool, Redis, mailbox del actor) y devuelve **503** si alguna no está lista, para que el balanceador no le mande tráfico.
+
+### 4️⃣ Graceful shutdown: drenar la cola antes de salir
+
+```rust
+use std::sync::mpsc;
+use std::thread;
+
+enum Job { Work(u32), Shutdown }
+
+fn procesar_con_drain(jobs: Vec<Job>) -> Vec<u32> {
+    let (tx, rx) = mpsc::channel();
+    for j in jobs { tx.send(j).unwrap(); }
+    drop(tx);
+    thread::spawn(move || {
+        let mut hechos = Vec::new();
+        loop {
+            match rx.recv() {
+                Ok(Job::Work(n)) => hechos.push(n),
+                Ok(Job::Shutdown) => {
+                    // Drena el trabajo YA encolado antes de cerrar (flush en SIGTERM).
+                    while let Ok(Job::Work(n)) = rx.try_recv() { hechos.push(n); }
+                    break;
+                }
+                Err(_) => break,
+            }
+        }
+        hechos
+    }).join().unwrap()
+}
+
+// procesar_con_drain(vec![Work(1), Work(2), Shutdown, Work(3)]) == [1, 2, 3]
+// ↑ el Work(3) posterior al Shutdown TAMBIÉN se procesa: nada se pierde al apagar.
+```
+
+> Esto modela el `with_graceful_shutdown` del `server`: al recibir `SIGTERM`, dejas de aceptar trabajo nuevo pero **drenas** lo pendiente (peticiones en vuelo, buffers del `PersistenceWriter`) antes de terminar. La versión Tokio usa `tokio::select!` + `signal::ctrl_c()` + drenado de canales.
+
+### 5️⃣ `IntoResponse` para `DomainError` *(requiere Axum)*
+
+```rust
+use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
+use serde_json::json;
+
+impl IntoResponse for DomainError {
+    fn into_response(self) -> Response {
+        let p = self.to_problem(); // reutiliza el mapeo de la sección 2
+        let status = StatusCode::from_u16(p.status).unwrap();
+        // content-type real: application/problem+json
+        (status, Json(json!({
+            "type": "about:blank", "title": p.title,
+            "status": p.status, "detail": p.detail,
+        }))).into_response()
+    }
+}
+// async fn handler(...) -> Result<Json<T>, DomainError> { ... usa `?` ... }
+```
+
+### 6️⃣ Contrato OpenAPI desde el código con `utoipa` *(requiere utoipa)*
+
+```rust
+use utoipa::{OpenApi, ToSchema};
+
+#[derive(ToSchema)]
+struct CreateEvent { project: String, payload: String }
+
+#[derive(OpenApi)]
+#[openapi(paths(create_event), components(schemas(CreateEvent)))]
+struct ApiDoc; // ApiDoc::openapi() -> spec servible en /docs (Swagger UI)
+
+#[utoipa::path(post, path = "/events", responses((status = 201, description = "creado")))]
+async fn create_event() { /* ... */ }
+```
+
+> *Contract-first* o *code-first*: con `utoipa` el `openapi.yaml` se genera desde los tipos y handlers, así el contrato **nunca** se desincroniza de la implementación.
+
+---
+
 ## ✅ CHECKLIST DEFINITIVO — "SHIP IT" (Definition of Done Global)
 
 ### Código & Arquitectura
@@ -330,9 +509,7 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 ### Portfolio & Soft Skills
 - [ ] **Repo Público:** `github.com/tu-usuario/tu-capstone`. `README` impecable.
 - [ ] **Video Demo:** 10 min, audio claro, terminal legible (fuente grande), explica *decisiones*, no solo features.
-- [ ] **Blog Post / `ARCHITECTURE.md`:** Escrito para un Senior Engineer. "Por qué X y no Y".
--"
-- citando benchmarks propios (Mes 5).
+- [ ] **Blog Post / `ARCHITECTURE.md`:** Escrito para un Senior Engineer. "Por qué X y no Y", citando benchmarks propios (Mes 5).
 
 ---
 

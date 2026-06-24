@@ -71,13 +71,37 @@ nav:
       - chapter_01/section_00.md
       - Instalación y primeros pasos: chapter_01/section_01.md
       - Aritmética en Rust: chapter_01/section_02.md
+      - Variables, tipos, funciones y control de flujo: chapter_01/section_03.md
+      - Ownership, Borrowing y Slices: chapter_01/section_04.md
+      - Structs, Enums y Pattern Matching: chapter_01/section_05.md
+      - Módulos, Colecciones, Errores y Traits: chapter_01/section_06.md
   - Mes 2 — Genéricos y Traits:
       - chapter_02/section_00.md
+      - Generics, Trait Bounds y Lifetimes: chapter_02/section_01.md
+      - Traits Avanzados: chapter_02/section_02.md
+      - Smart Pointers e Interior Mutability: chapter_02/section_03.md
+      - Testing, Documentación y Tooling: chapter_02/section_04.md
   - Mes 3 — Async y Web:
       - chapter_03/section_00.md
+      - Fundamentos Async: chapter_03/section_01.md
+      - Tokio Ecosistema y Axum: chapter_03/section_02.md
+      - Bases de datos con SQLx y Serde: chapter_03/section_03.md
+      - Observabilidad, Docker y CI/CD: chapter_03/section_04.md
   - Mes 4 — Sistemas, CLI y WASM:
       - chapter_04/section_00.md
+      - CLI Profesional: chapter_04/section_01.md
+      - FFI y unsafe: chapter_04/section_02.md
+      - WebAssembly: chapter_04/section_03.md
+      - Parsing y Text Processing: chapter_04/section_04.md
   - Mes 5 — Arquitectura y Rendimiento:
       - chapter_05/section_00.md
+      - Patrones de diseño y arquitectura: chapter_05/section_01.md
+      - Concurrencia avanzada y lock-free: chapter_05/section_02.md
+      - Profiling y optimización: chapter_05/section_03.md
+      - Especialización — elige tu camino: chapter_05/section_04.md
   - Mes 6 — Proyecto Capstone:
       - chapter_06/section_00.md
+      - Diseño y contrato del capstone: chapter_06/section_01.md
+      - Implementación core — make it work: chapter_06/section_02.md
+      - Servidor HTTP, auth y tests E2E: chapter_06/section_03.md
+      - Especialización y pulido final: chapter_06/section_04.md

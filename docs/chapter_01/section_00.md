@@ -102,7 +102,7 @@ STACK (LIFO, Rápido, Tamaño fijo conocido en compile-time)
 HEAP (Puntero + Len + Cap, Tamaño dinámico, Más lento acceso)
 ┌─────────────────────┐     ┌─────────────────────┐
 │  let s1 = String::  │     │   HEAP MEMORY       │
-│  from("hello");     │────▶│   [h, e, l, l, o]   │  <-- Datos reales
+│  from("hello");     │───▶│   [h, e, l, l, o]   │  <-- Datos reales
 │  // s1 = (ptr, 5, 5)│     └─────────────────────┘
 │  let s2 = s1;       │     💥 MOVE! s1 INVALIDADO
 │  // s2 = (ptr, 5, 5)│     s1 ya no apunta a nada válido
