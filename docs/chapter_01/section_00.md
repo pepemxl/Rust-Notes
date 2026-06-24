@@ -63,15 +63,18 @@ rustlings        # Modo interactivo (watch): edita -> guarda -> test auto
 | `rustlings hint <ejercicio>` | `rustlings hint <ejercicio>` (igual) |
 
 **Completa estos ejercicios (Carpeta `exercises/`):**
-1.  `variables/` (mut, shadowing, const, scope)
-2.  `functions/` (params, returns, statements vs expressions, divergent `!`)
-3.  `if/` (expresiones if, else if, let else - *preview*)
-4.  `primitive_types/` (tuples, arrays, slices intro, string literals vs String)
+
+1. `variables/` (mut, shadowing, const, scope)
+2. `functions/` (params, returns, statements vs expressions, divergent `!`)
+3. `if/` (expresiones if, else if, let else - *preview*)
+4. `primitive_types/` (tuples, arrays, slices intro, string literals vs String)
 
 > **💡 Truco:** Si te atascas > 10 min: `rustlings hint <ejercicio>`. Lee el error del compilador *antes* de la pista.
 
 ### 🧪 Mini-Reto: "Hola Cargo Avanzado"
+
 Crea un proyecto `cargo new hello_cargo`.
+
 1.  Añade dependencia: `cargo add rand` (generar número aleatorio).
 2.  Añade dev-dependency: `cargo add --dev pretty_assertions`.
 3.  Escribe un test en `#[cfg(test)]` que use `pretty_assertions::assert_eq!`.
