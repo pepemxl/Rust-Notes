@@ -485,6 +485,166 @@ fn bench_nginx_parsing(c: &mut Criterion) {
 
 ---
 
+## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+
+> Las secciones **1–5 compilan y corren con `rustc 1.81` (edición 2021) usando SOLO `std`** — sin `clap`, `nom`, `bindgen` ni `wasm-bindgen`. Cubren el núcleo verificable del mes: **FFI/`unsafe` seguro** y **parsing zero-copy a mano**. Las secciones 6–7 (clap / wasm-bindgen) requieren crates externas y se muestran como referencia idiomática.
+
+### 1️⃣ Exportar a C: `extern "C"`, `#[no_mangle]`, `#[repr(C)]`
+
+```rust
+#[repr(C)] // layout idéntico a C: campos en orden, sin reordenado del compilador
+struct Punto { x: f64, y: f64 }
+
+#[no_mangle] // el símbolo se llama exactamente "suma" (sin name-mangling de Rust)
+pub extern "C" fn suma(a: i32, b: i32) -> i32 { a + b }
+```
+
+> `#[repr(C)]` es **obligatorio** en cualquier struct que cruce la frontera FFI: sin él, Rust puede reordenar campos y el layout no coincidiría con el de C → UB.
+
+### 2️⃣ Strings entre mundos: `CString` (owned) y `CStr` (prestado)
+
+```rust
+use std::ffi::{CStr, CString};
+use std::os::raw::c_char;
+
+fn rust_a_c_y_vuelta(s: &str) -> String {
+    let c = CString::new(s).expect("sin NUL interior"); // String -> char* (NUL-terminated)
+    let ptr: *const c_char = c.as_ptr();
+    // unsafe encapsulado: `ptr` es válido mientras `c` siga viva.
+    let de_vuelta = unsafe { CStr::from_ptr(ptr) };
+    de_vuelta.to_string_lossy().into_owned()            // char* -> String
+}
+// rust_a_c_y_vuelta("hola FFI") == "hola FFI"
+```
+
+> Nunca pases `String::as_ptr()` a C: un `String` **no** termina en `\0`. Usa siempre `CString`. Y al recibir de C, `CStr::from_ptr` es `unsafe` porque confías en que el puntero es válido y NUL-terminado.
+
+### 3️⃣ Transferir ownership como en C: `Box::into_raw` / `Box::from_raw`
+
+```rust
+fn ownership_transfer() -> i32 {
+    let b = Box::new(99);
+    let raw: *mut i32 = Box::into_raw(b);           // ownership "sale" hacia C
+    // ... C guarda/usa el puntero ...
+    let recuperado = unsafe { Box::from_raw(raw) }; // de vuelta a Rust
+    *recuperado                                     // si NO recuperas: memory leak
+}
+```
+
+> `into_raw` **renuncia** a la gestión automática; tú (o C) eres responsable de devolverlo con `from_raw` exactamente una vez. Es el mecanismo canónico para pasar objetos Rust por un puntero opaco a C.
+
+### 4️⃣ El patrón clave del mes: wrapper **seguro** sobre `unsafe` + `Drop`
+
+```rust
+struct Buffer { ptr: *mut u8, len: usize }
+
+impl Buffer {
+    fn new(len: usize) -> Self {
+        let boxed = vec![0u8; len].into_boxed_slice();
+        let ptr = Box::into_raw(boxed) as *mut u8; // tomamos ownership crudo
+        Buffer { ptr, len }
+    }
+
+    // API pública 100% segura: la precondición se valida ANTES del unsafe.
+    fn set(&mut self, i: usize, val: u8) {
+        assert!(i < self.len, "fuera de rango");
+        unsafe { *self.ptr.add(i) = val; }
+    }
+    fn get(&self, i: usize) -> u8 {
+        assert!(i < self.len, "fuera de rango");
+        unsafe { *self.ptr.add(i) }
+    }
+}
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        // Reconstruimos el Box y dejamos que Rust libere la memoria. Sin leak.
+        unsafe {
+            let slice = std::ptr::slice_from_raw_parts_mut(self.ptr, self.len);
+            let _ = Box::from_raw(slice);
+        }
+    }
+}
+```
+
+> Esta es la **idea central de la Semana 14**: el `unsafe` queda *encapsulado* y la API expuesta es imposible de usar mal (bounds checked + `Drop` libera el recurso). Cada `into_raw` tiene su `from_raw` ⇒ ni doble-free ni leak.
+
+### 5️⃣ Parser combinator a mano (el modelo de `nom`), **zero-copy**
+
+```rust
+// Igual que nom: una función toma el input y devuelve (resto, salida).
+type PResult<'a, O> = Result<(&'a str, O), &'a str>;
+
+/// Consume el prefijo `t` si está. Devuelve (resto, prefijo).
+fn etiqueta<'a>(t: &str, input: &'a str) -> PResult<'a, &'a str> {
+    match input.strip_prefix(t) {
+        Some(resto) => Ok((resto, &input[..t.len()])),
+        None => Err(input),
+    }
+}
+
+/// Toma todo hasta `c` (sin incluirlo). El resultado es un SLICE del input: no copia.
+fn tomar_hasta<'a>(c: char, input: &'a str) -> PResult<'a, &'a str> {
+    match input.find(c) {
+        Some(i) => Ok((&input[i + c.len_utf8()..], &input[..i])),
+        None => Err(input),
+    }
+}
+
+fn main() {
+    assert_eq!(etiqueta("GET ", "GET /api"), Ok(("/api", "GET ")));
+    // Extrae la IP de una línea de log sin asignar memoria nueva:
+    assert_eq!(tomar_hasta(' ', "127.0.0.1 200"), Ok(("200", "127.0.0.1")));
+    println!("OK");
+}
+```
+
+> Los resultados (`&str`) son **vistas dentro del input original** (zero-copy), exactamente la propiedad que hace a `nom` rápido. `nom` añade combinadores (`alt`, `tuple`, `many0`, `map_res`) sobre este mismo patrón `I -> IResult<I, O>`.
+
+### 6️⃣ `clap` Derive: parseo de argumentos declarativo *(requiere `clap`)*
+
+```rust
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(name = "mytool", version, about = "Navaja suiza en Rust")]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+    #[arg(short, long, action = clap::ArgAction::Count)] // -v, -vv, -vvv
+    verbose: u8,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Hashea archivos
+    Hash { files: Vec<std::path::PathBuf> },
+}
+
+// fn main() {
+//     let cli = Cli::parse();   // valida, genera --help/--version, sale con error claro
+//     match cli.command { Commands::Hash { files } => { /* ... */ } }
+// }
+```
+
+### 7️⃣ `wasm-bindgen`: exportar Rust al navegador *(requiere `wasm-bindgen`)*
+
+```rust
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn saludar(nombre: &str) -> String {
+    format!("Hola desde Rust+Wasm, {nombre}!")
+}
+
+// JS:  import init, { saludar } from "./pkg";
+//      await init(); saludar("mundo");
+```
+
+> `#[wasm_bindgen]` genera el *glue* JS/TS automáticamente. El mismo principio del § 5 (devolver slices/datos sin copiar) aplica para mover `Uint8Array`/`ImageData` entre Rust y el Canvas con el mínimo de copias.
+
+---
+
 ## ✅ CHECKLIST FINAL MES 4 (Definition of Done)
 
 ### 1. CLI Profesional (`mytool`)
