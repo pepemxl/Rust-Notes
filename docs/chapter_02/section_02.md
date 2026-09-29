@@ -739,7 +739,9 @@ impl ByteBuffer {
         Self { datos: Vec::with_capacity(cap), cursor_lectura: 0 }
     }
 
-    pub fn en_interno(self) -> Vec<u8> { self.datos }
+    // ByteBuffer implementa Drop, así que no podemos mover `self.datos` fuera
+    // (E0509). `mem::take` lo reemplaza por un Vec vacío y nos da el original.
+    pub fn en_interno(mut self) -> Vec<u8> { std::mem::take(&mut self.datos) }
 
     pub fn longitud(&self) -> usize { self.datos.len() }
 
@@ -812,7 +814,7 @@ impl From<&[u8]> for ByteBuffer {
 }
 
 impl From<ByteBuffer> for Vec<u8> {
-    fn from(b: ByteBuffer) -> Vec<u8> { b.datos }
+    fn from(b: ByteBuffer) -> Vec<u8> { b.en_interno() } // reutiliza el mem::take de arriba
 }
 
 impl From<&str> for ByteBuffer {

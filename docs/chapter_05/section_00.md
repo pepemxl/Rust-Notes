@@ -274,7 +274,7 @@ fn bench_counters(c: &mut Criterion) {
 #### Metodología Obligatoria (Documentar en `OPTIMIZATION_LOG.md`)
 1.  **Baseline:** `criterion` bench actual. `flamegraph` identifica Top 3 hotspots.
 2.  **Hipótesis:** "Hotspot X es `HashMap` con `SipHash` -> Cambiar a `ahash`".
-3.  **Implementación:** Cambio mínimal (feature flag `fast-hash`).
+3.  **Implementación:** Cambio mínimo (feature flag `fast-hash`).
 4.  **Verificación:** `criterion` compara baseline vs new. `cargo bloat` verifica code size.
 5.  **Regresión:** `cargo test` + `cargo miri test` (si `unsafe` involucrado).
 
@@ -406,7 +406,7 @@ my-ecosystem/
 | :--- | :--- | :--- | :--- |
 | **Typestate** | Explosión de Tipos / Boilerplate | 20 structs `Foo<State1>`, `Foo<State2>`... | **Enum Interno + PhantomData** para almacenamiento. **Generics** solo en API pública. Macros para generar impls repetitivos. |
 | **Actor Model** | Mailbox Overflow / Backpressure | `tx.send().await` bloquea indefinidamente / OOM. | **Bounded Channels** (`mpsc::channel(N)`). `try_send` + `yield_now` + retry. **Load Shedding** (drop oldest / reject new). Métricas `mailbox_len`. |
-| **Atomics / Ordering** | `Relaxed` usado incorrectamente | Data races lógicos (valores "imposibles"), loops infinitos. | **Default a `SeqCst`**. Solo `Relaxed` si **demostras** (model checking `loom` / `shuttle`) que es seguro. `AcqRel` en RMW (CAS loops). |
+| **Atomics / Ordering** | `Relaxed` usado incorrectamente | Data races lógicos (valores "imposibles"), loops infinitos. | **Default a `SeqCst`**. Solo `Relaxed` si **demuestras** (model checking `loom` / `shuttle`) que es seguro. `AcqRel` en RMW (CAS loops). |
 | **False Sharing** | Contadores en array `Vec<AtomicUsize>` | Throughput **disminuye** al añadir hilos. | `#[repr(align(64))]` o `cache_padded::CachePadded`. Verificar con `perf stat -e cache-misses,cache-references`. |
 | **Profiling** | Optimizar "Hot Path" equivocado | 10% ganancia en función que es 1% del tiempo. | **Flamegraph + `criterion`**. Enfócate en **"Self Time" alto** y **"Callee Count" alto**. Amdahl's Law. |
 | **Monomorphization Bloat** | `Vec<T>` instanciado para 50 tipos T | Binario 50MB+. Compile time 10min. | **`dyn Trait` / Type Erasure** en boundaries calientes. `Box<dyn Fn>`. `impl Trait` en args (no return) ayuda. `cargo bloat --release --crates -n 100`. |

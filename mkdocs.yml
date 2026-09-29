@@ -1,6 +1,9 @@
 site_name: Rust Notes
 site_description: Notas del curso de Rust — 6 meses de estudio
 site_author: Jose Alonzo
+repo_url: https://github.com/pepemxl/Rust-Notes
+repo_name: pepemxl/Rust-Notes
+edit_uri: edit/master/docs/
 docs_dir: docs
 use_directory_urls: true
 
@@ -47,7 +50,10 @@ markdown_extensions:
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  - pymdownx.snippets:
+      # Incluye código real del workspace: --8<-- "src/chapter_01/example_06/src/main.rs"
+      base_path: ["."]
+      check_paths: true   # falla el build si un snippet no existe
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid

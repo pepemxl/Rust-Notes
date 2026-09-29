@@ -849,10 +849,11 @@ impl std::fmt::Display for UrlCode {
 }
 
 // ── Marcadores de estado ──────────────────────────────────────────────────
+// Debug hace falta porque #[derive(Debug)] en UrlEntry<S> exige S: Debug.
 
-pub struct Draft;
-pub struct Active;
-pub struct Expired;
+#[derive(Debug)] pub struct Draft;
+#[derive(Debug)] pub struct Active;
+#[derive(Debug)] pub struct Expired;
 
 // ── Struct principal ──────────────────────────────────────────────────────
 

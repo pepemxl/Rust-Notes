@@ -1,0 +1,15 @@
+[package]
+name = "example_03"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+# Ejemplo didáctico: compara un literal de texto con un literal numérico,
+# por eso usa "{}" con literales y el valor aproximado de pi a propósito.
+[lints.clippy]
+print_literal = "allow"
+approx_constant = "allow"

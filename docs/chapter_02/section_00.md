@@ -106,14 +106,19 @@ where
     pub fn get(&mut self, key: &K) -> Option<&V> {
         // Limpieza perezosa (lazy expiration)
         let now = self.time.now();
-        if let Some(entry) = self.map.get(key) {
-            if entry.expires_at > now {
-                return Some(&entry.value);
-            }
+        // Primero decidimos SIN devolver el préstamo: el patrón
+        // `if let Some(e) = self.map.get(key) { return Some(&e.value) }` seguido de
+        // `self.map.remove(key)` no compila con el borrow checker actual (NLL
+        // "problem case #3"; lo resolverá Polonius). Separar consulta y mutación sí.
+        let expirada = match self.map.get(key) {
+            Some(entry) => entry.expires_at <= now,
+            None => return None,
+        };
+        if expirada {
+            self.map.remove(key);
+            return None;
         }
-        // Si expiró o no existe, borrar y devolver None
-        self.map.remove(key);
-        None
+        self.map.get(key).map(|entry| &entry.value)
     }
     
     pub fn len(&self) -> usize { self.map.len() }

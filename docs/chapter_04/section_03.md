@@ -1184,6 +1184,19 @@ export default defineConfig({
 
 ---
 
+## Proyectos de práctica: reproductor de video
+
+El repositorio incluye dos experimentos en
+[`projects/`](https://github.com/pepemxl/Rust-Notes/tree/master/projects) que sirven
+de punto de partida para practicar lo de esta semana:
+
+| Proyecto | Qué es | Idea para extenderlo |
+| :--- | :--- | :--- |
+| [`video_player`](https://github.com/pepemxl/Rust-Notes/tree/master/projects/video_player) | Módulo Wasm mínimo: `wasm-bindgen` + `web-sys` para controlar un `<video>` desde Rust (`make video-player` lo compila con `wasm-pack`). | Añade pausa, búsqueda y velocidad de reproducción; mide el tamaño del `.wasm` con y sin `wasm-opt -Oz`. |
+| [`video_player2`](https://github.com/pepemxl/Rust-Notes/tree/master/projects/video_player2) | Servidor `actix-web` que sirve una página y archivos de video estáticos, con Docker para desarrollo. | Reemplaza el JavaScript de la página por el módulo Wasm de `video_player`. |
+
+---
+
 ## ✅ Checklist de la Semana 15
 
 - [ ] El toolchain está instalado: `wasm-pack`, `wasm32-unknown-unknown` target.

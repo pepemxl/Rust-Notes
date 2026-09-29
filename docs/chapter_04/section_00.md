@@ -93,7 +93,7 @@ mytool/
 │   └── src/main.rs        # Genera completions, man pages, checksums
 ├── src/
 │   ├── main.rs            # Entry point, clap setup
-│   ├── cli/               # Modulos por subcomando
+│   ├── cli/               # Módulos por subcomando
 │   │   ├── mod.rs
 │   │   ├── hash.rs        # indicatif + blake3/sha2 streaming
 │   │   ├── genpass.rs     # entropy, wordlist (eff/diceware)

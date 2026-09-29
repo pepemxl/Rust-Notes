@@ -483,7 +483,8 @@ pub fn extraer_fechas(texto: &str) -> Vec<(String, String, String)> {
 }
 
 pub fn extraer_urls(texto: &str) -> Vec<&str> {
-    let re = Regex::new(r"https?://[^\s<>\"]+").unwrap();
+    // En un raw string `\"` NO escapa la comilla: usamos r#"..."# para incluir `"`.
+    let re = Regex::new(r#"https?://[^\s<>"]+"#).unwrap();
     re.find_iter(texto).map(|m| m.as_str()).collect()
 }
 

@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements-docs.txt
 # but copy it in too so the image can build the site standalone.
 COPY mkdocs.yml ./
 COPY docs ./docs
+COPY src ./src
 
 EXPOSE 8000
 

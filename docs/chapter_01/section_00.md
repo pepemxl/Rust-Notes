@@ -118,7 +118,7 @@ HEAP (Puntero + Len + Cap, Tamaño dinámico, Más lento acceso)
 
 > **Regla de Oro:** ¿Implementa `Copy`? (Primitivos, referencias `&T`). **Sí** -> Copy automático. **No** -> Move automático. ¿Quieres duplicar Heap? `.clone()`.
 
-### 🤝 Referencias & Borrowing (Prestamo)
+### 🤝 Referencias & Borrowing (Préstamo)
 *   `&T` (Referencia Inmutable / **Shared Reference**): **Muchos** lectores simultáneos. **Nadie** escribe. `&T` **es `Copy`**.
 *   `&mut T` (Referencia Mutable / **Exclusive Reference**): **Exactamente UNO** escritor. **Nadie** lee ni escribe a la vez. **No es `Copy`** (es `Move`).
 *   **Regla del Borrow Checker:** `&T` XOR `&mut T`. Nunca ambos a la vez en el mismo scope.
@@ -144,7 +144,7 @@ HEAP (Puntero + Len + Cap, Tamaño dinámico, Más lento acceso)
 ```rust
 // src/main.rs o tests/manual_split.rs
 fn split_manual(input: &str, delimiter: char) -> Vec<&str> {
-    let mut result = Vec::new();
+    let mut result: Vec<&str> = Vec::new();
     let mut start = 0;
     // Pista: Itera sobre input.char_indices()
     // char_indices() -> (byte_index, char)
@@ -172,6 +172,7 @@ fn test_split() {
 ### 🏗️ Structs (Datos Estructurados)
 ```rust
 // Classic Struct
+#[derive(Default)] // necesario para usar ..Default::default() abajo
 struct User { username: String, email: String, active: bool, sign_in_count: u64 }
 
 // Tuple Struct (Newtype Pattern - Ver Mes 5)
@@ -283,7 +284,7 @@ src/
 ### 📚 Colecciones Estándar (Cheat Sheet Mental)
 | Colección | Uso Típico | Clave |
 | :--- | :--- | :--- |
-| **`Vec<T>`** | Lista ordenada, dinamica. | `push`, `pop`, `get(i)` -> `Option<&T>`, `iter()`, `drain(..)`. |
+| **`Vec<T>`** | Lista ordenada, dinámica. | `push`, `pop`, `get(i)` -> `Option<&T>`, `iter()`, `drain(..)`. |
 | **`HashMap<K, V>`** | Clave-Valor, lookup O(1). | `entry(key).or_insert(default)` (patrón *entry API* evita double hash). `get(&key)` -> `Option<&V>`. |
 | **`HashSet<T>`** | Unicidad, pertenencia. | `insert`, `contains`, `union`/`intersection`/`difference`. |
 | **`BTreeMap`/`BTreeSet`** | Ordenados por clave. | Range queries, `first_key_value()`, `pop_first()`. |
@@ -328,7 +329,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> { // Box<dyn Error> = type e
 | :--- | :--- | :--- |
 | **`Debug`** | `:?` formatting (logs, dev). **Siempre** derivable. | Casi nunca. |
 | **`Display`** | Formato usuario final (`{}`). **No derivable**. | Siempre que muestres al user. `fmt::Display`. |
-| **`Clone`** | Duplicación explícida (`.clone()`). | Tipos con `String`/`Vec`/Heap. |
+| **`Clone`** | Duplicación explícita (`.clone()`). | Tipos con `String`/`Vec`/Heap. |
 | **`Copy`** | Duplicación implícita (bitwise). **Solo si todos los campos son `Copy`**. | `#[derive(Copy, Clone)]` en structs simples (`Color`, `Point`, `Status`). |
 | **`PartialEq` / `Eq`** | `==` / `!=`. `Eq` = equivalencia total (req para `HashMap` keys). | Keys de HashMap, comparar dominio. |
 | **`PartialOrd` / `Ord`** | `<`, `>`, `sort()`. `Ord` = total order. | Keys de `BTreeMap`, sorting. |
@@ -403,9 +404,9 @@ todo_cli/
 | Trampa | Síntoma | Solución |
 | :--- | :--- | :--- |
 | **"String Hell"** | `expected &str, found String` / `cannot move out of borrowed content` | **Firmas:** `fn foo(s: &str)`. **Llamadas:** `foo(&my_string)` (Deref coercion). **Ownership:** `let owned = borrowed.to_owned();`. |
-| **`unwrap()` Fever** | Código peta en producción por archivo faltante. | **Prohibido** en librerías/logica. `?` en funciones que devuelven `Result`. `expect("contexto claro")` *solo* en `main`/tests/setup. |
+| **`unwrap()` Fever** | Código peta en producción por archivo faltante. | **Prohibido** en librerías/lógica. `?` en funciones que devuelven `Result`. `expect("contexto claro")` *solo* en `main`/tests/setup. |
 | **Borrow Checker Fight** | `cannot borrow as mutable because also borrowed as immutable` | **Acorta scopes** `{ ... }`. **Clona datos baratos** (`.clone()` en `String` corto, `Copy` types). **Reestructura:** pasa ownership (`fn process(mut v: Vec)`) en lugar de `&mut Vec` si es posible. Usa `RefCell`/`Mutex` *solo* si es.shared mutability real (Mes 2). |
-| **Modulos Caos** | `use crate::foo::bar` vs `use super::bar` vs `mod foo;` duplicados. | **Un `mod` por archivo/directorio.** `main.rs` declara `mod models;`. `models.rs` **no** declara `mod models`. `use crate::models::Task;` en hijos. |
+| **Módulos Caos** | `use crate::foo::bar` vs `use super::bar` vs `mod foo;` duplicados. | **Un `mod` por archivo/directorio.** `main.rs` declara `mod models;`. `models.rs` **no** declara `mod models`. `use crate::models::Task;` en hijos. |
 | **`Copy` en structs con `String`** | `the trait Copy is not implemented` | `String` **no es `Copy`**. Si tu struct tiene `String`, **no puedes** derivar `Copy`. Usa `Clone`. |
 | **Lifetimes en Structs (Prematuro)** | `expected named lifetime parameter` | **Semana 1-2: Evita referencias `&'a T` DENTRO de structs.** Usa `String`, `Vec`, `Box`, `Arc`. Lifetimes en structs = **Mes 2/3**. |
 
@@ -413,7 +414,7 @@ todo_cli/
 
 ## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
 
-> Todos los ejemplos de esta sección **compilan con Rust 1.85+ (edición 2024)** salvo los marcados con `// ❌ NO COMPILA`, que son errores *intencionales* para que leas el mensaje del compilador. Copialos en un `cargo new` y juega con ellos.
+> Todos los ejemplos de esta sección **compilan con Rust 1.85+ (edición 2024)** salvo los marcados con `// ❌ NO COMPILA`, que son errores *intencionales* para que leas el mensaje del compilador. Cópialos en un `cargo new` y juega con ellos.
 
 ### 1️⃣ Ownership & Move (la regla del único dueño)
 

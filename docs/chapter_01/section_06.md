@@ -388,6 +388,7 @@ Cuando una función usa `?` con errores de distinto tipo, el compilador protesta
 no sabe cómo convertir uno en otro:
 
 ```rust
+// ❌ NO COMPILA: ¿qué tipo de error va en lugar de ???
 fn leer_numero(ruta: &str) -> Result<i32, ???> {
     let contenido = std::fs::read_to_string(ruta)?;  // io::Error
     let n: i32 = contenido.trim().parse()?;           // ParseIntError
@@ -666,7 +667,7 @@ impl fmt::Display for Color {
 fn main() {
     let rojo = Color { r: 255, g: 0, b: 0 };
     println!("{rojo}");     // #FF0000
-    println!("{rojo:?}");   // ❌ falta #[derive(Debug)]  —  añádelo también
+    println!("{rojo:?}");   // ❌ NO COMPILA: falta #[derive(Debug)]  —  añádelo también
 }
 ```
 

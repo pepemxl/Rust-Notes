@@ -202,9 +202,15 @@ Muchas APIs de C usan handles opacos — el usuario nunca ve la estructura inter
 // En el header C: typedef struct Buffer Buffer;
 // La definición real es privada (opaque)
 
-// En Rust, representamos un tipo opaco con un enum vacío:
+// En Rust, representamos un tipo opaco con un struct de tamaño cero y campos
+// privados (patrón recomendado por el Rustonomicon). `#[repr(C)]` no admite enums
+// vacíos, y un enum vacío es un tipo *inhabitado*: crear una referencia a él es UB.
 #[repr(C)]
-pub enum BufferOpaco {}   // no se puede instanciar, solo usar como *mut BufferOpaco
+pub struct BufferOpaco {
+    _datos: [u8; 0],
+    // Sin Send/Sync/Unpin automáticos: no sabemos qué hace C con el objeto.
+    _marker: std::marker::PhantomData<(*mut u8, std::marker::PhantomPinned)>,
+}   // no se puede instanciar fuera del módulo, solo usar como *mut BufferOpaco
 
 // Esto es mejor que *mut c_void porque es type-safe:
 // no puedes pasar accidentalmente un *mut OtroOpaco donde se espera *mut BufferOpaco

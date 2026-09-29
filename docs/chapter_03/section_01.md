@@ -56,9 +56,9 @@ listo todavía y que se avanza preguntándole si ya terminó.
 
 ```rust
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::Context;
 
-// Definición simplificada de std::future::Future
+// Definición simplificada de std::future::Future (y de Poll, más abajo)
 trait Future {
     type Output;
 

@@ -1,0 +1,13 @@
+[package]
+name = "example_06"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+# Ejemplo didáctico de precedencia: `4 % 3 * 2` equivale a `1 * 2` a propósito.
+[lints.clippy]
+identity_op = "allow"

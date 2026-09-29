@@ -357,8 +357,8 @@ conciso que un `match` con `_ => {}`:
 ```rust
 let config = Some(String::from("debug"));
 
-// Con match:
-match config {
+// Con match (sobre &config, para no mover el String y poder reutilizarlo abajo):
+match &config {
     Some(valor) => println!("config: {valor}"),
     None => {}
 }

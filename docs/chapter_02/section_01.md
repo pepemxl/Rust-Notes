@@ -153,8 +153,9 @@ Ya los conoces: `Option<T>` y `Result<T, E>` de la librería estándar son exact
 
 ```rust
 // Así están definidos en std (simplificado):
-enum Option<T> { None, Some(T) }
-enum Result<T, E> { Ok(T), Err(E) }
+// enum Option<T> { None, Some(T) }
+// enum Result<T, E> { Ok(T), Err(E) }
+// (comentados: si los definiéramos aquí, ocultarían a los de std)
 
 // Un stack genérico propio:
 #[derive(Debug)]
@@ -206,7 +207,7 @@ Cuando hay muchos bounds o múltiples parámetros, `where` mejora la legibilidad
 
 ```rust
 // Difícil de leer:
-fn combinar<T: std::fmt::Display + Clone, U: std::fmt::Debug + PartialOrd>(a: T, b: U) -> String {
+fn combinar_dificil<T: std::fmt::Display + Clone, U: std::fmt::Debug + PartialOrd>(a: T, b: U) -> String {
     format!("{} {:?}", a.clone(), b)
 }
 
@@ -230,7 +231,7 @@ Pon los bounds **donde se necesitan**, no antes:
 ```rust
 // ❌ MAL: pone el bound en la definición del struct
 // Obliga a que TODAS las operaciones requieran Debug, aunque no todas lo necesiten
-struct Contenedor<T: std::fmt::Debug> { valor: T }
+struct ContenedorMal<T: std::fmt::Debug> { valor: T }
 
 // ✅ BIEN: el struct no pone restricciones
 struct Contenedor<T> { valor: T }
@@ -293,6 +294,7 @@ anónimo. El compilador genera código monomorphizado exactamente igual.
 ```rust
 // impl Trait en argumento no funciona cuando necesitas que dos parámetros
 // sean el mismo tipo:
+// ❌ NO COMPILA
 fn maximo(a: impl PartialOrd, b: impl PartialOrd) -> ??? {
     // a y b podrían ser tipos distintos, no se pueden comparar entre sí
 }
@@ -505,14 +507,14 @@ referencias de salida sin lifetime determinado, exige anotación manual.
 
 **Regla 1:** Cada referencia de entrada recibe su propio lifetime:
 
-```rust
+```text
 fn foo(x: &str, y: &str)  →  fn foo<'a, 'b>(x: &'a str, y: &'b str)
 ```
 
 **Regla 2:** Si hay exactamente **una** referencia de entrada, su lifetime se asigna
 a todas las de salida:
 
-```rust
+```text
 fn primero(s: &str) -> &str  →  fn primero<'a>(s: &'a str) -> &'a str
 // No hace falta anotar: el compilador lo resuelve solo
 ```
@@ -520,10 +522,11 @@ fn primero(s: &str) -> &str  →  fn primero<'a>(s: &'a str) -> &'a str
 **Regla 3:** Si hay `&self` o `&mut self`, su lifetime se asigna a todas las
 referencias de salida:
 
-```rust
+```text
 impl<'a> Extracto<'a> {
-    fn primera_frase(&self) -> &str  →  fn primera_frase(&'a self) -> &'a str
-    // Tampoco hace falta anotar: regla 3 lo resuelve
+    fn primera_frase(&self) -> &str  →  fn primera_frase<'b>(&'b self) -> &'b str
+    // Tampoco hace falta anotar: regla 3 lo resuelve.
+    // Ojo: la salida toma el lifetime de &self ('b), NO el 'a del struct.
 }
 ```
 

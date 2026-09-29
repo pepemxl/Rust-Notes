@@ -317,7 +317,7 @@ tipo:
 
 ```rust
 fn sumar(a: i32, b: i32) -> i32 {
-    a + b;   // ❌ con el ; devuelve (), pero se esperaba i32
+    a + b;   // ❌ NO COMPILA: con el ; devuelve (), pero se esperaba i32
 }
 ```
 

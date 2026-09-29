@@ -1,75 +1,100 @@
-# Introducción a Rust
+# Instalación y primeros pasos
 
-En esta sección aprenderemos:
+Esta es la primera sección práctica de la **Semana 1**. Aquí aprenderemos:
 
-- Como escribir y ejecutar nuestro primer programa en Rust.
-- Como imprimir a pantalla texto y números.
-- Como agregar comentarios.
+- Cómo instalar Rust con `rustup` en Linux, macOS o Windows.
+- Qué son `rustc`, `cargo` y los *toolchains* (`stable`, `beta`, `nightly`).
+- Cómo crear, compilar y ejecutar un proyecto con **Cargo**.
+- Cómo imprimir texto y números con las macros `print!` y `println!`.
+- Cómo usar los *placeholders* de formato: posicionales, con nombre, `{:?}`, ancho y precisión.
+- Cómo escribir comentarios, incluidos los comentarios de documentación.
 
-Primero que nada para empezar a trabajar con RUST podemos hacerlo en Windows, Linux o Mac, 
-para cada uno podemos realizar su respectiva instalación, vamos a la página de rust [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+> 💡 **Filosofía de la Semana 1:** *El compilador es tu pair programmer más estricto.*
+> Desde el primer "Hola mundo" acostúmbrate a leer los mensajes de error completos:
+> casi siempre dicen exactamente qué arreglar.
+
+---
+
+## Instalación
+
+Rust funciona en Windows, Linux y macOS. La forma oficial de instalarlo es **`rustup`**,
+el instalador y gestor de versiones de Rust. Las instrucciones para cada sistema están en
+[rust-lang.org/tools/install](https://www.rust-lang.org/tools/install).
 
 ![rust install](../images/rust_install.png)
 
-donde seguiremos las instrucciones según sea el caso.
+**Linux y macOS:**
 
-Normalmente siempre hay que agregar al PATH del sistema la ubicación del binario de
-Rust `~/.cargo/bin`.
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"   # o abre una terminal nueva
+```
 
-Basta con abrir una linea de comando y ejecutar:
+**Windows:** descarga y ejecuta `rustup-init.exe` desde la misma página. Rust usa el
+*linker* de Microsoft, así que el instalador te pedirá instalar las **Visual Studio Build
+Tools** con el componente "Desarrollo para el escritorio con C++".
+
+El instalador deja los binarios (`rustc`, `cargo`, `rustup`…) en `~/.cargo/bin`
+(`%USERPROFILE%\.cargo\bin` en Windows) y agrega esa ruta al `PATH`.
+
+### Verificar la instalación
 
 ```bash
 rustc --version
+cargo --version
 ```
-y deberemos ver algo como lo siguiente:
+
+Deberías ver algo como:
 
 ```text
 rustc 1.96.0 (ac68faa20 2026-05-25)
+cargo 1.96.0 (30a34c682 2026-05-25)
 ```
 
-Hay que notar que para cada sistema operativo tenemos tres versiones de Rust,
-una versión estable, una beta y una llamada nightly. Como siempre se les recomienda
-trabajar con la versión estable.
+Tu versión será igual o más reciente: sale una versión estable de Rust **cada 6 semanas**.
 
+### Toolchains: `stable`, `beta` y `nightly`
 
-## Empezando a codificar en Rust
+`rustup` gestiona tres canales:
 
-Cuando corremos un programa en Rust este busca la función main y entonces la ejecuta.
-Por lo cual si no hay una función `main` decimos que este es un programa incompleto,
-o se trata de una libreria la cual no sera llamada directamente.
+| Canal | Qué es | Cuándo usarlo |
+| :--- | :--- | :--- |
+| `stable` | Versión estable, cada 6 semanas | **Siempre**, salvo que necesites algo experimental |
+| `beta` | La próxima versión estable | Probar que tu código no se rompe con la siguiente versión |
+| `nightly` | Compilación diaria con features experimentales | Features inestables (`#![feature(...)]`) |
 
-Las librerias en Rust tienen  muchos puntos de entrada, pero un programa
-en Rust solo uno, a traves de la principal `main`.
+Comandos útiles:
 
-El mínimo código necesario para compilar un programa de Rust es: 
-
-```rust
-fn main(){}
+```bash
+rustup update                  # actualiza todos los toolchains instalados
+rustup show                    # muestra el toolchain activo
+rustup component add clippy rustfmt rust-analyzer   # linter, formateador y LSP
+rustup doc --book              # abre "The Rust Programming Language" sin conexión
 ```
 
-para crear un nuevo proyecto usaremos el package manager `cargo` con la instrucción:
-`cargo new <name_project>` que creará una carpeta con el nombre que designemos, por ejemplo `cargo new example_00`, 
-que crea la siguiente estructura de archivos:
+---
 
-- example_00
-  - src
-    - [main.rs](./codes/example_00/src/main.rs)
-  - [Cargo.toml](./codes/example_00/Cargo.toml)
+## Tu primer proyecto con Cargo
 
-por defecto el archivo contiene el código:
-```rust
-fn main() {
-    println!("Hello, world!");
-}
+`rustc` es el compilador, pero en el día a día usarás **Cargo**: el gestor de proyectos,
+dependencias y compilación de Rust. Crea un proyecto nuevo con:
+
+```bash
+cargo new example_00
+cd example_00
 ```
 
-modifica el archivo para que solo contenga el siguiente código:
+Cargo genera esta estructura (e inicializa un repositorio git):
 
-```rust
-fn main(){}
+```text
+example_00/
+├── .gitignore
+├── Cargo.toml        ← manifiesto: nombre, versión, edición, dependencias
+└── src/
+    └── main.rs       ← punto de entrada del programa
 ```
 
-el archivo `Cargo.toml` contiene información del paquete que acabamos de crear.
+El archivo [`Cargo.toml`](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/example_00/Cargo.toml) describe el paquete:
 
 ```toml
 [package]
@@ -77,33 +102,49 @@ name = "example_00"
 version = "0.1.0"
 edition = "2024"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 ```
 
+La clave `edition` indica qué **edición** del lenguaje usa el proyecto. Las ediciones
+(2015, 2018, 2021, 2024) permiten introducir cambios incompatibles sin romper el código
+existente: cada crate declara la suya y todas pueden convivir en un mismo programa.
 
-una vez creado vamos dentro de la carpeta `example_00` corremos la instrucción
-`cargo run`.
+Y [`src/main.rs`](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/example_00/src/main.rs) contiene:
 
-con una salida como la siguiente:
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+
+### La función `main`
+
+Cuando ejecutamos un programa de Rust, lo primero que corre es la función `main`. Un
+**binario** tiene exactamente un punto de entrada, `main`; una **librería** no tiene
+`main` y expone muchos puntos de entrada (sus funciones públicas).
+
+El programa más pequeño que compila en Rust es una función `main` sin parámetros que no
+hace nada ([example_00](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/example_00/src/main.rs)):
+
+```rust
+--8<-- "src/chapter_01/example_00/src/main.rs"
+```
+
+Reemplaza el contenido de `src/main.rs` por esa línea y ejecuta `cargo run`:
 
 ```text
-~/Rust-Notes/chapter_01/codes/example_00$ cargo run
-   Compiling example_00 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_00)
+~/proyectos/example_00$ cargo run
+   Compiling example_00 v0.1.0 (~/proyectos/example_00)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
      Running `target/debug/example_00`
 ```
 
-es decir, una función `main`, sin parámetros con las llaves sin regresar nada.
-
-Con ello tenemos el código más pequeño que podemos crear en Rust.
-
-Siempre necesitamos una funcion `main`, en caso de no contar con la función `main` tendriamos un error como el siguiente:
+Compila y corre, aunque no imprime nada. Si en cambio borramos también `main`, el
+compilador se queja:
 
 ```text
-~/Rust-Notes/chapter_01/codes/example_00$ cargo run
-   Compiling example_00 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_00)
+~/proyectos/example_00$ cargo run
+   Compiling example_00 v0.1.0 (~/proyectos/example_00)
 error[E0601]: `main` function not found in crate `example_00`
  --> src/main.rs:1:2
   |
@@ -114,7 +155,8 @@ For more information about this error, try `rustc --explain E0601`.
 error: could not compile `example_00` (bin "example_00") due to 1 previous error
 ```
 
-corriendo `rustc --explain E0601`
+Cada error tiene un código (`E0601`). `rustc --explain E0601` muestra una explicación
+detallada con ejemplos:
 
 ```text
 No `main` function was found in a binary crate.
@@ -122,177 +164,304 @@ No `main` function was found in a binary crate.
 To fix this error, add a `main` function:
 ```
 
+> 💡 **Hábito:** cuando un error no te quede claro, ejecuta `rustc --explain <código>`
+> antes de buscar en internet.
+
+### Comandos esenciales de Cargo
+
+| Comando | Qué hace |
+| :--- | :--- |
+| `cargo new <nombre>` | Crea un proyecto binario (`--lib` para una librería) |
+| `cargo run` | Compila (si hace falta) y ejecuta |
+| `cargo build` | Compila en modo *debug* → `target/debug/` |
+| `cargo build --release` | Compila optimizado → `target/release/` |
+| `cargo check` | Verifica que compila **sin generar binario** (mucho más rápido) |
+| `cargo fmt` | Formatea el código con el estilo estándar |
+| `cargo clippy` | Linter: detecta código poco idiomático y errores comunes |
+| `cargo doc --open` | Genera y abre la documentación del proyecto y sus dependencias |
+
+---
+
 ## Hello World
 
-Ahora hagamos el nuestro clásico ejemplo Hello World.
-
- Ejecutemos `cargo new example_01`
-
-
-que crea la siguiente estructura de archivos:
-
-- example_01
-  - src
-    - [main.rs](./codes/example_01/src/main.rs)
-  - [Cargo.toml](./codes/example_01/Cargo.toml)
-
-por defecto el archivo contiene el código:
-```rust
-fn main() {
-    println!("Hello, world!");
-}
-```
-
-vamos dentro de la carpeta `example_01` y ejecutemos `cargo run` entonces tendremos una salida como la siguiente:
+Crea un segundo proyecto con `cargo new example_01`. El código por defecto ya es el
+clásico [Hello World](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/example_01/src/main.rs); ejecútalo con `cargo run`:
 
 ```text
-   Compiling example_01 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_01)
+   Compiling example_01 v0.1.0 (~/proyectos/example_01)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
      Running `target/debug/example_01`
 Hello, world!
 ```
 
-En realidad no necesitamos utilizar el manejador de paquetes `cargo`, basta con que creemos un archivo que contenga el código:
-```rust
-fn main() {
-    println!("Hello, world!");
-}
+### Sin Cargo: `rustc` directamente
+
+Cargo no es obligatorio. Basta con un archivo, por ejemplo
+[`codigo_fuente.rs`](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/example_02/codigo_fuente.rs), con el mismo código, y
+compilarlo con `rustc`:
+
+```bash
+rustc codigo_fuente.rs
+./codigo_fuente          # en Windows: .\codigo_fuente.exe
 ```
 
-digamos archivo `codigo_fuente.rs` y ejecutamos `rustc codigo_fuente.rs`: esto generará un ejecutable
-(`codigo_fuente` en Linux/macOS; en Windows `codigo_fuente.exe` más un archivo `.pdb` con símbolos de depuración).
-
-Podemos ejecutar simplemente 
 ```text
-~/Rust-Notes/chapter_01/codes/example_02$ ./codigo_fuente
 Hello, world!
 ```
 
+En Linux/macOS se genera el ejecutable `codigo_fuente`; en Windows, `codigo_fuente.exe`
+más un archivo `.pdb` con símbolos de depuración. Para cualquier cosa más grande que un
+archivo usa Cargo: gestiona dependencias, perfiles de compilación, tests y documentación.
 
-Cosas a destacar aqui es que `println` no es una función si no se trata de una macro, para indicar que una macro será utilizada se utiliza el simbolo de admiración `!`, como en el ejemplo, al igual que en C/C++, las macros son reemplazadas por su correspondiente código en tiempo de compilación.
+---
 
+## Macros de impresión
 
-### Literal String
+Observa el `!` en `println!`: **`println!` no es una función, es una macro**. Las macros
+se expanden a código Rust en tiempo de compilación. Gracias a eso, el compilador
+**verifica el formato**: si el número de `{}` no coincide con el de argumentos, el
+programa no compila (en C, `printf` con argumentos de menos es comportamiento
+indefinido).
 
-En Rust llamaremos literal string, a las cadenas de caracteres que se definan o utilizen en el código fuente, mientras que no literal, significara todos esos string que son definidos en tiempo de ejecución a traves de lectura de archivo o al interactuar con los usuarios, o copiar texto de un literal string.
+| Macro | Salida | Salto de línea |
+| :--- | :--- | :--- |
+| `print!` | stdout | No |
+| `println!` | stdout | Sí |
+| `eprint!` / `eprintln!` | stderr (para errores y diagnósticos) | No / Sí |
+| `format!` | Devuelve un `String` en vez de imprimir | — |
 
-## Imprimiendo combinaciones de literal strings
+### Literales de cadena
 
-Podemos escribir varias cadenas de caracteres en la misma sentencia, al estilo python, usando las llaves que delimitan donde será puesta cada una de las cadenas:
+Llamamos **literal string** a una cadena escrita directamente en el código fuente, entre
+comillas dobles: `"Hola"`. Las cadenas que se construyen en tiempo de ejecución (leídas de
+un archivo, escritas por el usuario, generadas con `format!`) son de tipo `String`;
+veremos la diferencia entre `&str` y `String` en la
+[Semana 2](section_04.md).
+
+### Placeholders
+
+Las llaves `{}` marcan dónde se inserta cada argumento:
 
 ```rust
-print!("{}, {}", "Hola", "Mundo!");
+fn main() {
+    print!("{}, {}", "Hola", "Mundo!");
+}
 ```
-salida:
+
 ```text
 Hola, Mundo!
 ```
 
-En este caso la macro `print` recibe tres parámetros, separados por comas, aunque los tres parámetros son literal strings. 
-
-Una diferencia significativa contra C/C++ es que aqui, si importa tener la misma cantidad de llaves que de variables
-que iran dentro de esas llaves de lo contrario nos marcará un error de compilación, algo que no sucedia en C/C++.
-
-Podemos agregar saltos de linea, simplemente agregando `\n`.
-
+Si sobran o faltan argumentos, el error aparece **al compilar**:
 
 ```rust
-print!("Linea 1\nLinea 2\nLinea 3");
+fn main() {
+    println!("{} y {}", "Rust"); // ❌ NO COMPILA
+}
 ```
-salida:
+
+```text
+error: 2 positional arguments in format string, but there is 1 argument
+ --> src/main.rs:2:15
+  |
+2 |     println!("{} y {}", "Rust");
+  |               ^^   ^^   ------
+```
+
+Hay varias formas de referirse a los argumentos:
+
+```rust
+fn main() {
+    // Posicionales: se pueden repetir y reordenar
+    println!("{0} y {1}; {1} y {0}", "Rust", "Cargo");
+
+    // Con nombre
+    println!("{lenguaje} {version}", lenguaje = "Rust", version = 2024);
+
+    // Variables capturadas directamente (Rust 1.58+): la forma más usada hoy
+    let lenguaje = "Rust";
+    let edicion = 2024;
+    println!("{lenguaje} edición {edicion}");
+}
+```
+
+```text
+Rust y Cargo; Cargo y Rust
+Rust 2024
+Rust edición 2024
+```
+
+### Formato de depuración, ancho y precisión
+
+Dentro de las llaves, después de `:`, se indica **cómo** formatear el valor:
+
+```rust
+fn main() {
+    println!("{:?}", "texto");          // Debug: muestra las comillas
+    println!("{:?}", (1, 2.5, 'x'));    // Debug funciona con tuplas, vectores, etc.
+    println!("[{:>8}]", "der");         // alineado a la derecha en 8 columnas
+    println!("[{:<8}]", "izq");         // a la izquierda
+    println!("[{:^8}]", "centro");      // centrado
+    println!("[{:08.3}]", 3.14159);     // 8 de ancho, relleno con ceros, 3 decimales
+    println!("{:.2}", 2.0_f64 / 3.0);   // 2 decimales (redondea)
+    println!("{:b} {:o} {:x} {:X} {:e}", 42, 42, 255, 255, 1234.5);
+}
+```
+
+```text
+"texto"
+(1, 2.5, 'x')
+[     der]
+[izq     ]
+[ centro ]
+[0003.142]
+0.67
+101010 52 ff FF 1.2345e3
+```
+
+`{}` usa el trait **`Display`** (formato para usuarios) y `{:?}` usa **`Debug`** (formato
+para programadores). Los tipos que definas tú no tienen `Display` automáticamente, pero sí
+pueden derivar `Debug` con `#[derive(Debug)]`; lo veremos en la
+[Semana 3](section_05.md).
+
+### Secuencias de escape
+
+```rust
+fn main() {
+    print!("Linea 1\nLinea 2\nLinea 3\n");
+    println!("Tab:\tfin | Comillas: \" | Llaves: {{}} | Barra: \\");
+}
+```
+
 ```text
 Linea 1
 Linea 2
 Linea 3
+Tab:	fin | Comillas: " | Llaves: {} | Barra: \
 ```
+
+Para imprimir una llave literal se duplica: `{{` y `}}`.
+
+---
 
 ## Imprimir números
 
-Como es de imaginarse podemos hacerlos de tres maneras
+Un número se puede imprimir como parte del literal, como un literal string que pasa por
+un placeholder, o como un **literal numérico** ([example_03](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/example_03/src/main.rs)):
 
 ```rust
-println!("Número pi: 3.14159");
-println!("Número pi: {}","3.14159");
-println!("Número pi: {}",3.14159);
+--8<-- "src/chapter_01/example_03/src/main.rs"
 ```
-salida:
+
 ```text
-~/Rust-Notes/chapter_01/codes/example_03$ cargo run
-   Compiling example_03 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_03)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.05s
-     Running `target/debug/example_03`
 Número pi: 3.14159
 Número pi: 3.14159
 Número pi: 3.14159
 ```
 
-La primera como un literal string, la segunda como combinación de literal strings, y la tercera como combinación de un literal string con un literal number.
-
-
-El comportamiento de la combinación de literal string con literal number es un tanto especial, literal number es convertido durante tiempo de ejecución a un string como podemos ver en el siguiente ejemplo:
+La salida es idéntica, pero no es lo mismo: en el tercer caso `3.14159` es un `f64` que se
+convierte a texto en tiempo de ejecución. Se nota con ceros a la izquierda
+([example_04](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/example_04/src/main.rs)):
 
 ```rust
-    println!("Número pi: 3.14159");
-    println!("Número pi: {}","3.14159");
-    println!("Número pi: {}",3.14159);
-    println!("Número pi: {}","0003.14159");
-    println!("Número pi: {}",0003.14159);
+--8<-- "src/chapter_01/example_04/src/main.rs"
 ```
 
-salida:
 ```text
-~/Rust-Notes/chapter_01/codes/example_04$ cargo run
-   Compiling example_04 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_04)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.69s
-     Running `target/debug/example_04`
-Número pi: 3.14159
-Número pi: 3.14159
-Número pi: 3.14159
 Número pi: 0003.14159
 Número pi: 3.14159
 ```
 
-Donde podemos ver que para la combinación de literal strings 
-`"Número pi: {}","0003.14159"`, su salida fue tan solo sustituir las llaves por el texto, mientras que en la combinación `"Número pi: {}",0003.14159`, los ceros al inicio del número fueron ignorados.
-
+---
 
 ## Comentarios
 
-La sintaxis para agregar comentarios al código es la misma
-que utilizamos en C/C++:
+La sintaxis básica es la misma que en C/C++:
 
 ```rust
-// este es un comentario de una sola linea
+// Comentario de una sola línea
+
+/* Comentario
+   de varias
+   líneas */
 ```
 
+Una diferencia: en Rust los comentarios de bloque **se pueden anidar**. Esto es válido en
+Rust (y no en C/C++, donde el primer `*/` cierra el comentario):
+
 ```rust
-/* Este es un comentario de 
-  varias
-  lineas 
-  de 
-  código
+/* Comentario externo
+   /* comentario interno */
+   el externo sigue abierto hasta aquí
 */
 ```
 
-Los siguientes dos ejemplos son dos diferencias en los comentarios que se hacen en rust que trabajan de forma diferente a como lo harian en C/C++.
-
-```rust
-/* Este es un comentario /*valido  para
-  varias*/
-  lineas 
-  de 
-  código,
-  en C/C++ esto no es valido
-*/
-```
+Y por la misma razón, esto **no** compila en Rust (pero sí en C/C++):
 
 ```rust
 // ❌ NO COMPILA en Rust: el comentario anidado queda sin cerrar
-/* Este es un comentario /* invalido  para
-  varias
-  lineas 
-  de 
-  código,
-  en C/C++ esto es valido
+/* Comentario externo
+   /* comentario interno sin cerrar
 */
 ```
+
+### Comentarios de documentación
+
+Rust tiene comentarios especiales que generan documentación con `cargo doc`. Admiten
+Markdown y, como veremos en el [Mes 2](../chapter_02/section_04.md), los ejemplos de
+código que contienen se ejecutan como tests:
+
+```rust
+//! Documenta el módulo o crate que lo contiene (va al inicio del archivo).
+
+/// Documenta el elemento que viene justo después.
+/// Devuelve el doble de `n`.
+fn doble(n: i32) -> i32 {
+    n * 2
+}
+
+fn main() {
+    println!("{}", doble(21));
+}
+```
+
+---
+
+## 🧪 Mini-reto: tarjeta de presentación
+
+Crea un proyecto con `cargo new tarjeta` y escribe un programa que imprima exactamente
+esto, usando variables capturadas (`{nombre}`), alineación y precisión en lugar de
+escribir los espacios a mano:
+
+```text
++----------------------------+
+|        Ada Lovelace        |
++----------------------------+
+| Lenguaje:             Rust |
+| Edición:              2024 |
+| Horas de estudio:     12.5 |
++----------------------------+
+```
+
+Pistas:
+
+1. `{:^28}` centra un texto en 28 columnas.
+2. `{:<18}` y `{:>8}` alinean a izquierda y derecha.
+3. `{:.1}` fija un decimal para un `f64`.
+
+Cuando funcione, ejecuta `cargo fmt` y `cargo clippy` y revisa si sugieren algo.
+
+---
+
+## ✅ Checklist
+
+- [ ] Tengo Rust instalado y `rustc --version` / `cargo --version` responden.
+- [ ] Sé qué es un toolchain y para qué sirven `stable`, `beta` y `nightly`.
+- [ ] Creo proyectos con `cargo new` y conozco `run`, `build`, `check`, `fmt` y `clippy`.
+- [ ] Sé qué es la **edición** en `Cargo.toml`.
+- [ ] Entiendo que `println!` es una **macro** y que el formato se valida al compilar.
+- [ ] Uso placeholders posicionales, con nombre y variables capturadas.
+- [ ] Distingo `{}` (`Display`) de `{:?}` (`Debug`) y sé controlar ancho y precisión.
+- [ ] Sé escribir comentarios normales, anidados y de documentación.
+
+> **Siguiente paso:** [Aritmética en Rust](section_02.md).

@@ -257,6 +257,7 @@ pub fn formato_bytes(bytes: u64) -> String {
 ### Detección de TTY: no colorear cuando se redirige
 
 ```rust
+use owo_colors::OwoColorize;
 use std::io::IsTerminal;
 
 pub fn es_tty() -> bool {

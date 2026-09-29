@@ -11,6 +11,7 @@ services:
       # Live reload: edits to config/content are picked up without rebuilding
       - ./docs:/docs/docs
       - ./mkdocs.yml:/docs/mkdocs.yml
+      - ./src:/docs/src            # código incluido con pymdownx.snippets
     command: mkdocs serve --dev-addr=0.0.0.0:8000
 
   # One-shot service to render the static site into ./site
@@ -22,6 +23,7 @@ services:
     volumes:
       - ./docs:/docs/docs
       - ./mkdocs.yml:/docs/mkdocs.yml
+      - ./src:/docs/src            # código incluido con pymdownx.snippets
       - ./site:/docs/site
     command: mkdocs build --strict --site-dir /docs/site
     profiles:
