@@ -1,0 +1,11 @@
+# La imagen de docs solo necesita requirements-docs.txt, mkdocs.yml, docs/ y src/.
+# Todo lo demás se excluye para que el contexto de build sea pequeño.
+.git
+target
+**/target
+projects
+site
+node_modules
+.cache
+.mypy_cache
+.ruff_cache

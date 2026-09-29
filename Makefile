@@ -2,12 +2,13 @@
 #
 # Run `make` or `make help` to list available targets.
 
-COMPOSE_DOCS := docker compose -f docker-compose.docs.yml
+COMPOSE_DOCS := HOST_UID=$(shell id -u) HOST_GID=$(shell id -g) \
+                docker compose -f docker-compose.docs.yml
 
 .DEFAULT_GOAL := help
 
 .PHONY: help all \
-        check check-rust check-doc-blocks check-docs check-spelling \
+        check check-rust check-doc-blocks check-docs check-spelling check-python \
         docs-serve docs-build docs-down docs-logs docs-shell docs-clean \
         video-player
 
@@ -26,7 +27,7 @@ all: docs-build ## Default build (renders the static docs site)
 ## Verificación (lo mismo que corre el CI)
 ## ----------------------------------------------------------------------------
 
-check: check-rust check-doc-blocks check-docs check-spelling ## Run every check the CI runs
+check: check-rust check-doc-blocks check-docs check-spelling check-python ## Run every check the CI runs
 
 check-rust: ## fmt + clippy + tests of the example workspace (src/)
 	cargo fmt --all --check
@@ -42,6 +43,10 @@ check-docs: ## Build the site in strict mode (broken links, missing snippets)
 check-spelling: ## Spell-check docs in Spanish (needs Node; words list in cspell.json)
 	npx --yes -p cspell@8 -p @cspell/dict-es-es cspell --no-progress
 
+check-python: ## Lint and type-check scripts/ (ruff + mypy --strict, config in pyproject.toml)
+	ruff check scripts/
+	mypy
+
 ## ----------------------------------------------------------------------------
 ## MkDocs documentation
 ## ----------------------------------------------------------------------------
@@ -50,6 +55,7 @@ docs-serve: ## Serve docs with live reload at http://localhost:8000
 	$(COMPOSE_DOCS) up --build docs
 
 docs-build: ## Render the static site into ./site
+	@mkdir -p site  # si Docker crea el directorio del bind mount, queda como root
 	$(COMPOSE_DOCS) --profile build run --build --rm build
 
 docs-down: ## Stop and remove the docs container

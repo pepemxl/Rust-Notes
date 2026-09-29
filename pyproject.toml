@@ -1,7 +1,7 @@
 [project]
 name = "Rust-Notes"
 version = "0.0.1"
-description = ""
+description = "Notas del curso de Rust (6 meses). El único código Python son los scripts de verificación."
 license = { text = "All Rights Reserved" }
 readme = "README.md"
 requires-python = ">=3.11"
@@ -11,23 +11,20 @@ authors = [
 
 [tool.uv]
 dev-dependencies = [
-  "pytest",
-  "pytest-rerunfailures",
-  "pytest-watcher",
   "ruff",
   "mypy",
-  "typing-extensions",
 ]
 
 [tool.mypy]
 strict = true
 python_version = "3.11"
 files = [
-  "src/",
+  "scripts/",
 ]
 
 [tool.ruff]
 target-version = "py311"
+line-length = 100
 
 [tool.ruff.lint]
 select = [
@@ -53,14 +50,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = [
-  "src",
-  "doctest_document",
-  "docutils_compat",
-  "gp_libs",
-  "linkify_issues",
-  "pytest_doctest_docutils",
-]
 combine-as-imports = true
 
 [tool.ruff.lint.pydocstyle]
@@ -71,14 +60,3 @@ convention = "numpy"
 "*.py" = [
   "T201"  # print() statements are used for doctest and normal outputs
 ]
-
-[tool.pytest.ini_options]
-addopts = "--tb=short --no-header --showlocals --doctest-modules"
-doctest_optionflags = "ELLIPSIS NORMALIZE_WHITESPACE"
-testpaths = [
-  "src/tests",
-]
-
-[tool.pytest-watcher]
-now = true
-ignore_patterns = ["*.py.*.py"]

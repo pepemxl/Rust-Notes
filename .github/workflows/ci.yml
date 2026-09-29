@@ -49,6 +49,18 @@ jobs:
           python-version: "3.12"
       - run: python3 scripts/check_doc_blocks.py --verbose
 
+  python:
+    name: Scripts de Python (ruff + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff mypy
+      - run: ruff check scripts/
+      - run: mypy
+
   docs:
     name: Sitio MkDocs (strict)
     runs-on: ubuntu-latest

@@ -49,21 +49,10 @@ mkdocs serve
 | `make check-doc-blocks` | Compila cada bloque ` ```rust ` de `docs/` con `rustc` (edición 2024) |
 | `make check-docs` | Construye el sitio con `mkdocs build --strict` (enlaces y snippets) |
 | `make check-spelling` | Ortografía en español con `cspell` (requiere Node) |
+| `make check-python` | `ruff` y `mypy --strict` sobre `scripts/` |
 
-**Código en las notas.** Para ejemplos completos, crea un crate en `src/chapter_NN/` e
-inclúyelo en el Markdown con un snippet; así lo que se lee es exactamente lo que compila:
-
-````markdown
-```rust
---8<-- "src/chapter_01/example_06/src/main.rs"
-```
-````
-
-Los bloques escritos directamente en el Markdown también se compilan. Si un ejemplo no
-debe compilar a propósito, márcalo con `// ❌ NO COMPILA` o usa ` ```rust,compile_fail `.
-Los fallos conocidos (fragmentos que dependen de un bloque anterior) están en
-`scripts/doc_blocks_baseline.json`; tras arreglar bloques, actualízala con
-`python3 scripts/check_doc_blocks.py --update-baseline`.
+Para agregar contenido o ejemplos (plantilla de sección, snippets, convenciones y formato
+de commits), lee [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Estructura del repositorio
 
@@ -81,6 +70,8 @@ Los fallos conocidos (fragmentos que dependen de un bloque anterior) están en
 ├── scripts/                 # verificación de los bloques de código de docs/
 ├── Cargo.toml               # workspace de los ejemplos
 ├── cspell.json              # corrector ortográfico (palabras técnicas aceptadas)
+├── pyproject.toml           # configuración de ruff y mypy para scripts/
+├── CONTRIBUTING.md          # cómo agregar contenido y convenciones
 ├── mkdocs.yml               # configuración y navegación del sitio
 ├── Dockerfile.docs          # imagen para servir / construir la documentación
 ├── docker-compose.docs.yml

@@ -4,6 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile.docs
     image: rust-notes-docs
+    # Escribe como tu usuario (no root) para que ./site sea tuyo; el Makefile
+    # exporta HOST_UID/HOST_GID. Sin make, se usa 1000:1000.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     container_name: rust-notes-docs
     ports:
       - "8000:8000"
@@ -21,6 +24,9 @@ services:
       context: .
       dockerfile: Dockerfile.docs
     image: rust-notes-docs
+    # Escribe como tu usuario (no root) para que ./site sea tuyo; el Makefile
+    # exporta HOST_UID/HOST_GID. Sin make, se usa 1000:1000.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     volumes:
       - ./docs:/docs/docs
       - ./mkdocs.yml:/docs/mkdocs.yml

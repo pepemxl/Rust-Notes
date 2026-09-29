@@ -60,6 +60,8 @@ EXTERNAL_ERRORS = re.compile(
 
 @dataclass
 class Block:
+    """Un bloque ```rust extraído de un archivo Markdown."""
+
     file: Path
     line: int
     code: str
@@ -67,18 +69,22 @@ class Block:
 
     @property
     def key(self) -> str:
-        normalized = "\n".join(l.rstrip() for l in self.code.strip().splitlines())
+        """Hash estable del contenido (ignora espacios finales) para la línea base."""
+        normalized = "\n".join(ln.rstrip() for ln in self.code.strip().splitlines())
         return hashlib.sha1(normalized.encode()).hexdigest()[:16]
 
 
 @dataclass
 class Result:
+    """Resultado de compilar un bloque."""
+
     block: Block
     status: str  # ok | intencional | externo | falla
     error: str = ""
 
 
 def extract_blocks(path: Path) -> list[Block]:
+    """Extrae los bloques ```rust de un archivo, resolviendo snippets e indentación."""
     blocks: list[Block] = []
     lines = path.read_text(encoding="utf-8").splitlines()
     i = 0
@@ -87,7 +93,8 @@ def extract_blocks(path: Path) -> list[Block]:
         if not m:
             i += 1
             continue
-        indent, info, start, body = m.group(1), m.group(2), i + 1, []
+        indent, info, start = m.group(1), m.group(2), i + 1
+        body: list[str] = []
         i += 1
         while i < len(lines) and lines[i].strip() != "```":
             line = lines[i]
@@ -114,18 +121,19 @@ def _expand_snippets(body: list[str]) -> list[str]:
         lines = (ROOT / path).read_text(encoding="utf-8").splitlines()
         if section:
             inside, selected = False, []
-            for l in lines:
-                mark = SECTION_MARK.search(l)
+            for ln in lines:
+                mark = SECTION_MARK.search(ln)
                 if mark and mark.group(2) == section:
                     inside = mark.group(1) == "start"
                 elif inside:
-                    selected.append(l)
+                    selected.append(ln)
             lines = selected
-        out.extend(l for l in lines if not SECTION_MARK.search(l))
+        out.extend(ln for ln in lines if not SECTION_MARK.search(ln))
     return out
 
 
-def rustc(code: str, crate_type: str, workdir: str) -> subprocess.CompletedProcess:
+def rustc(code: str, crate_type: str, workdir: str) -> subprocess.CompletedProcess[str]:
+    """Compila `code` con rustc (solo metadata, sin generar binario)."""
     src = Path(workdir) / "bloque.rs"
     src.write_text(code, encoding="utf-8")
     return subprocess.run(
@@ -137,6 +145,7 @@ def rustc(code: str, crate_type: str, workdir: str) -> subprocess.CompletedProce
 
 
 def check(block: Block) -> Result:
+    """Clasifica un bloque: ok, intencional, externo o falla."""
     if "NO COMPILA" in block.code or re.search(r"compile_fail|ignore", block.info):
         return Result(block, "intencional")
     with tempfile.TemporaryDirectory() as tmp:
@@ -160,13 +169,16 @@ def check(block: Block) -> Result:
 
 
 def _first_error(stderr: str) -> str:
-    lines = [l for l in stderr.splitlines() if l.startswith("error")]
+    lines = [ln for ln in stderr.splitlines() if ln.startswith("error")]
     return lines[0] if lines else stderr.strip().splitlines()[0] if stderr.strip() else ""
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("files", nargs="*", type=Path, help="archivos .md (por defecto: todo docs/)")
+    """Punto de entrada: verifica los bloques o actualiza la línea base."""
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
+    parser.add_argument(
+        "files", nargs="*", type=Path, help="archivos .md (por defecto: todo docs/)",
+    )
     parser.add_argument("--update-baseline", action="store_true")
     parser.add_argument("--verbose", "-v", action="store_true", help="lista cada bloque que falla")
     args = parser.parse_args()
@@ -185,7 +197,8 @@ def main() -> int:
         BASELINE.write_text(json.dumps(
             {f: sorted(set(k)) for f, k in sorted(failing.items())},
             indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"Línea base actualizada: {sum(map(len, failing.values()))} bloques con fallo conocido.")
+        total = sum(map(len, failing.values()))
+        print(f"Línea base actualizada: {total} bloques con fallo conocido.")
         return 0
 
     baseline: dict[str, list[str]] = json.loads(BASELINE.read_text()) if BASELINE.exists() else {}
