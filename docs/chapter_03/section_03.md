@@ -837,7 +837,7 @@ pub struct RespuestaAcortar {
     pub expira_en: Option<i64>,  // Unix timestamp, None → no expira
 }
 
-/// Estadísticas devueltas por GET /:codigo/stats
+/// Estadísticas devueltas por GET /{codigo}/stats
 #[derive(Debug, Serialize)]
 pub struct EstadisticasUrl {
     pub codigo:    CodigoCorto,
@@ -1093,8 +1093,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health",        get(chequeo_salud::<AlmacenPostgres>))
         .route("/shorten",       post(acortar_url::<AlmacenPostgres>))
         .route("/urls",          get(listar_urls::<AlmacenPostgres>))
-        .route("/:codigo",       get(redirigir::<AlmacenPostgres>))
-        .route("/:codigo/stats", get(estadisticas::<AlmacenPostgres>))
+        .route("/{codigo}",       get(redirigir::<AlmacenPostgres>))
+        .route("/{codigo}/stats", get(estadisticas::<AlmacenPostgres>))
         .layer(middleware::from_fn(telemetria))
         .layer(CorsLayer::permissive())
         .with_state(estado);

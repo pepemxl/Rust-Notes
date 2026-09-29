@@ -79,7 +79,7 @@ ESTADO COMPARTIDO (AppState):
 [package]
 name    = "linkmetrics-server"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "linkmetrics-server"
@@ -317,7 +317,6 @@ impl JwksCache {
 // crates/server/src/auth/extractor.rs
 
 use axum::{
-    async_trait,
     extract::{FromRequestParts, State},
     http::{request::Parts, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
@@ -363,7 +362,7 @@ impl IntoResponse for AuthError {
     }
 }
 
-#[async_trait]
+// Axum 0.8: `async fn` nativo, sin `#[async_trait]`.
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = AuthError;
 
@@ -1438,20 +1437,22 @@ fn cli_check_sin_db_reporta_error_postgres() {
 
 ## Errores de compilación frecuentes esta semana
 
-### Error 1: extractor sin `FromRequestParts` implementado
+### Error 1: `#[async_trait]` sobrante al migrar a Axum 0.8
 
 ```text
-error[E0277]: the trait bound `AuthUser: FromRequestParts<AppState>` is not satisfied
-  --> src/handlers/links.rs:42:17
+error[E0195]: lifetime parameters or bounds on method `from_request_parts` do not match the trait declaration
+  --> src/auth/extractor.rs:58:14
    |
-42 | pub async fn crear_link(
-   |                        ^
-   |
-   = note: add `#[async_trait]` o implementa `FromRequestParts<AppState>` para `AuthUser`
+58 |     async fn from_request_parts(
+   |              ^^^^^^^^^^^^^^^^^^ lifetimes do not match method in trait
 
-SOLUCIÓN: el impl requiere la anotación correcta:
-  #[async_trait]
-  impl FromRequestParts<AppState> for AuthUser { ... }
+SOLUCIÓN: Axum 0.8 declara `FromRequestParts` con `async fn` nativo (Rust 1.75+).
+Quita el atributo y el import `axum::async_trait` (ya no existe):
+  impl FromRequestParts<AppState> for AuthUser {
+      type Rejection = AuthError;
+      async fn from_request_parts(parts: &mut Parts, state: &AppState)
+          -> Result<Self, Self::Rejection> { ... }
+  }
 ```
 
 ### Error 2: `State<T>` y `with_state` de tipo incorrecto

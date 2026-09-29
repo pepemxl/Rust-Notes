@@ -112,8 +112,9 @@ exclude = ["target", "**/target"]
 
 [workspace.dependencies]
 # Versiones centralizadas aquí (ver Mes 5)
-axum = { version = "0.7", features = ["ws"] }
-sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "chrono", "uuid", "json", "offline"] }
+axum = { version = "0.8", features = ["ws"] }
+# sqlx 0.8: el modo offline ya no es una feature; se activa con `cargo sqlx prepare` + `.sqlx/`
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate", "time", "uuid", "json"] }
 # ... resto de deps
 
 [workspace.lints.rust]
@@ -238,7 +239,7 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 *   **Optimización Bundle:**
     *   `wasm-opt -Oz --enable-mutable-globals --strip-debug`.
     *   `twiggy` para analizar `top` functions / `dominators` (quién retiene código).
-    *   `wee_alloc` / `lol_alloc` (si no `std`).
+    *   `lol_alloc` para Wasm de un hilo (no `wee_alloc`: sin mantenimiento).
     *   Code Splitting: `wasm-split` (experimental) o dynamic `import()`.
 *   **Frontend State:** `leptos::signal` / `dioxus::signal` + `server functions` (RPC type-safe).
 *   **Entregable:** Lighthouse Score > 95 (Performance, Best Practices, SEO). TTFB < 200ms.
@@ -253,7 +254,7 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 ### 🛤️ RUTA E: EMBEDDED (Embassy + Defmt)
 *   **Target:** RP2040 / ESP32-C3 / STM32H7 (QEMU si no hay HW).
 *   **Architecture:** `embassy` tasks: `sensor`, `comm` (LoRa/WiFi/Ethernet), `display`, `storage` (LittleFS/Embassy-FS).
-*   **Observabilidad:** `defmt` (logging zero-cost) + `probe-rs` / `probe-run` + `defmt-print` en host.
+*   **Observabilidad:** `defmt` (logging zero-cost) + `probe-rs run` + `defmt-print` en host.
 *   **Testing:** `embassy-nrf` / `embassy-stm32` mocks. `cargo test --target thumbv7em-none-eabihf`.
 *   **Entregable:** Video demo hardware real + `defmt` logs fluyendo. `README` con esquemático KiCad/Fritzing.
 
@@ -294,7 +295,7 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 
 ## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
 
-> Las secciones **1–4 compilan y corren con `rustc 1.81` (edición 2021) usando SOLO `std`** (incluyendo el actor de shutdown con `std::thread` + `mpsc`). Modelan, en pequeño, las decisiones de ingeniería del capstone: **arquitectura hexagonal**, **modelo de errores HTTP**, **readiness** y **apagado limpio**. Las secciones 5–6 (Axum / utoipa / tonic) requieren las crates del proyecto y van como referencia idiomática.
+> Las secciones **1–4 compilan y corren con Rust 1.85+ (edición 2024) usando SOLO `std`** (incluyendo el actor de shutdown con `std::thread` + `mpsc`). Modelan, en pequeño, las decisiones de ingeniería del capstone: **arquitectura hexagonal**, **modelo de errores HTTP**, **readiness** y **apagado limpio**. Las secciones 5–6 (Axum / utoipa / tonic) requieren las crates del proyecto y van como referencia idiomática.
 
 ### 1️⃣ Ports & Adapters: el corazón de la separación `core` / `db` / `server`
 
@@ -504,7 +505,7 @@ async fn create_event() { /* ... */ }
 - [ ] **Ruta B:** Plugin System dinámico (`libloading` + `abi_stable`) + `self_update` verificado (cosign) + Completions dinámicas.
 - [ ] **Ruta C:** Leptos/Dioxus SSR + Hydration + `wasm-opt -Oz` + `twiggy` analysis report + Lighthouse > 95.
 - [ ] **Ruta D:** `polars` Lazy API ETL -> Parquet/Delta Lake + `candle` Inference API + `datafusion` SQL Query Engine expuesto.
-- [ ] **Ruta E:** `embassy` async tasks en HW/QEMU + `defmt` logging + `probe-run` flash + `no_std` core logic compartido.
+- [ ] **Ruta E:** `embassy` async tasks en HW/QEMU + `defmt` logging + `probe-rs run` flash + `no_std` core logic compartido.
 
 ### Portfolio & Soft Skills
 - [ ] **Repo Público:** `github.com/tu-usuario/tu-capstone`. `README` impecable.

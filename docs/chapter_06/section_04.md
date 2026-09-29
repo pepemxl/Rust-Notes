@@ -434,7 +434,7 @@ pub struct PluginVTable {
 }
 
 // Plugin de ejemplo: crates/plugin-example/src/lib.rs
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn lm_plugin_init() -> *mut PluginVTable {
     let vtable = Box::new(PluginVTable {
         abi_version: linkmetrics_plugin_api::ABI_VERSION,
@@ -463,7 +463,8 @@ extern "C" fn plugin_execute(args: *const *const std::ffi::c_char, _len: usize) 
     0   // 0 = éxito
 }
 unsafe extern "C" fn plugin_destroy(this: *mut PluginVTable) {
-    drop(Box::from_raw(this));
+    // SAFETY: `this` viene de `Box::into_raw` en `lm_plugin_init` y se libera una sola vez.
+    drop(unsafe { Box::from_raw(this) });
 }
 ```
 
@@ -743,14 +744,15 @@ opt-level = "z"        # optimizar para tamaño, no velocidad
 lto       = true
 codegen-units = 1
 
-# Si usas wee_alloc (allocator más pequeño para WASM):
+# Allocator pequeño para Wasm de un hilo (no uses wee_alloc: sin mantenimiento):
 [dependencies]
-wee_alloc = { version = "0.4", optional = true }
+lol_alloc = { version = "0.4", optional = true }
 
-# En lib.rs:
-# #[cfg(feature = "wee_alloc")]
+# En lib.rs (ver Semana 15):
+# #[cfg(all(target_arch = "wasm32", feature = "lol_alloc"))]
 # #[global_allocator]
-# static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+# static ALLOC: lol_alloc::AssumeSingleThreaded<lol_alloc::FreeListAllocator> =
+#     unsafe { lol_alloc::AssumeSingleThreaded::new(lol_alloc::FreeListAllocator::new()) };
 ```
 
 ---
@@ -1154,7 +1156,7 @@ ARCHIVOS MÍNIMOS EN EL REPOSITORIO PÚBLICO:
 
 [![CI](https://github.com/usuario/linkmetrics/actions/workflows/ci.yml/badge.svg)](...)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Rust Version](https://img.shields.io/badge/rust-1.81%2B-orange.svg)](...)
+[![Rust Version](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](...)
 
 > Plataforma self-hosted de URL shortening con analytics en tiempo real.
 > Construida en Rust con Axum, SQLx y Redis.
@@ -1254,7 +1256,7 @@ consistency de < 1s, sin contención en DB.
 | Eventual consistency en clicks | Fuerte consistencia (DB sync) | 50x mayor throughput |
 | JWT stateless | Sessions en Redis | Sin estado compartido entre instancias |
 | GDPR: hash de IPs | Almacenar IP | Cumplimiento legal, reversibilidad imposible |
-| Rust stable (1.81) | Nightly | Reproducibilidad en CI, sin sorpresas |
+| Rust stable (1.85+, edición 2024) | Nightly | Reproducibilidad en CI, sin sorpresas |
 
 ## Cómo añadir un nuevo endpoint
 
@@ -1363,7 +1365,7 @@ ESTRUCTURA (10 minutos exactos):
   00:00 – 00:30  INTRO (30 segundos)
   ────────────────────────────────────
   "Hola, soy [nombre]. Construí LinkMetrics: una plataforma de URL shortening
-  con analytics en tiempo real. Stack: Rust 1.81, Axum, SQLx, PostgreSQL,
+  con analytics en tiempo real. Stack: Rust 1.85+ (edición 2024), Axum, SQLx, PostgreSQL,
   Redis, Docker. Voy a mostrar las 3 decisiones técnicas más interesantes."
   
   No describas features — describe DECISIONES.

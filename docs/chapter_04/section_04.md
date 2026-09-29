@@ -646,7 +646,7 @@ cargo new logparser --bin
 [package]
 name    = "logparser"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 nom         = "7"
@@ -1269,8 +1269,8 @@ done | logparser
   descriptivos con posición en el input.
 - [ ] El parser de nginx con nom devuelve referencias `&str` al input original
   (zero-copy) cuando el lifetime lo permite.
-- [ ] Las regex se compilan una sola vez con `OnceLock<Regex>` — nunca dentro de un
-  bucle ni en `lazy_static!` si hay `OnceLock` disponible.
+- [ ] Las regex se compilan una sola vez con `LazyLock<Regex>` / `OnceLock<Regex>` de
+  `std` — nunca dentro de un bucle (y sin `lazy_static!`, que ya no hace falta).
 - [ ] `AhoCorasick` busca N patrones simultáneamente en una sola pasada O(n+m+z) —
   no N llamadas a `contains` en secuencia.
 - [ ] `BufReader::lines()` procesa archivos de cualquier tamaño con memoria O(1) —

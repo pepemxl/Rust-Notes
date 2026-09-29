@@ -12,7 +12,7 @@
 | Concepto | Detalle Crítico para Rustaceans |
 | :--- | :--- |
 | **`rustup` / Toolchains** | `stable` (default), `beta`, `nightly`. `rustup update` frecuente. `rustup component add rust-src rust-analyzer clippy rustfmt`. |
-| **Cargo** | `cargo new --bin` (ejecutable), `cargo new --lib` (librería). `Cargo.toml` = manifest. `Cargo.lock` = **commitealo** en binarios, **ignóralo** en librerías (generalmente). |
+| **Cargo** | `cargo new --bin` (ejecutable), `cargo new --lib` (librería). `Cargo.toml` = manifest. `Cargo.lock` = **commitealo** (desde 2023 Cargo lo recomienda también en librerías, para builds reproducibles en CI). |
 | **Variables** | **Inmutables por defecto** (`let x = 5;`). `mut` es explícito (`let mut x = 5;`). *Shadowing* (`let x = x + 1;`) != Mutabilidad (cambia tipo/valor, nueva dirección memoria). |
 | **Tipos Escalares** | Enteros (`i8..i128`, `u8..u128`, `isize`, `usize` - **punteros/tamaños usan `usize`**), Flotantes (`f32`, `f64` default), Bool, Char (`char` = **Unicode Scalar Value**, 4 bytes, comillas simples `'🦀'`). |
 | **Tipos Compuestos** | **Tupla** `(i32, f64, u8)` (tamaño fijo, tipos heterogéneos, acceso `.0`, `.1`). **Array** `[T; N]` (tamaño fijo, mismo tipo, en **Stack**). `Vec<T>` (Heap, dinámico, *prefiere este*). |
@@ -29,9 +29,9 @@ source "$HOME/.cargo/env"
 rustup component add rustfmt clippy rust-src rust-analyzer
 
 # 3. Herramientas de cargo imprescindibles
-cargo install cargo-edit      # cargo add <crate> / cargo rm / cargo upgrade
+#    (`cargo add`, `cargo remove` y `cargo tree` ya vienen integrados en cargo)
+cargo install cargo-edit      # solo para `cargo upgrade` (actualizar versiones en Cargo.toml)
 cargo install cargo-watch     # cargo watch -x run / -x test / -x clippy
-cargo install cargo-tree      # cargo tree -d (duplicados) / -i (invertido)
 cargo install cargo-outdated  # Ver updates disponibles
 cargo install cargo-audit     # cargo audit (vulnerabilidades CVE)
 cargo install cargo-nextest   # Test runner ultra-rápido (cargo nextest run)
@@ -413,7 +413,7 @@ todo_cli/
 
 ## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
 
-> Todos los ejemplos de esta sección **compilan con `rustc 1.81` (edición 2021)** salvo los marcados con `// ❌ NO COMPILA`, que son errores *intencionales* para que leas el mensaje del compilador. Copialos en un `cargo new` y juega con ellos.
+> Todos los ejemplos de esta sección **compilan con Rust 1.85+ (edición 2024)** salvo los marcados con `// ❌ NO COMPILA`, que son errores *intencionales* para que leas el mensaje del compilador. Copialos en un `cargo new` y juega con ellos.
 
 ### 1️⃣ Ownership & Move (la regla del único dueño)
 

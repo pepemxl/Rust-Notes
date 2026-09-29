@@ -10,7 +10,7 @@ En esta sección aprenderemos:
 - Qué significa `unsafe` exactamente: qué invariantes se ceden al compilador y cuáles
   asume el programador.
 - Las cinco reglas del Rustonomicon que nunca se pueden violar.
-- `extern "C"`, `#[no_mangle]` y `#[repr(C)]`: los tres ingredientes de FFI.
+- `extern "C"`, `#[unsafe(no_mangle)]` y `#[repr(C)]`: los tres ingredientes de FFI (y qué cambió en la edición 2024).
 - Tipos de datos en la frontera: `c_int`, `CString`, `CStr`, `*mut T`, `NonNull<T>`.
 - Strings entre mundos: el problema del byte NUL y cómo `CString`/`CStr` lo resuelven.
 - Transferencia de ownership: `Box::into_raw` y `Box::from_raw`.
@@ -93,7 +93,10 @@ generar código arbitrariamente incorrecto, incluso en versiones que "parecían 
 /// # Safety
 /// `ptr` debe ser no nulo, alineado y apuntar a un `i32` inicializado
 unsafe fn leer_i32(ptr: *const i32) -> i32 {
-    *ptr   // unsafe porque desreferenciamos un puntero raw
+    // Edición 2024: dentro de una `unsafe fn` cada operación insegura también
+    // necesita su propio bloque `unsafe` (lint `unsafe_op_in_unsafe_fn`).
+    // SAFETY: el llamador garantiza el contrato documentado arriba.
+    unsafe { *ptr }
 }
 
 // Bloque unsafe: aísla la parte insegura dentro de una fn segura
@@ -119,11 +122,13 @@ operación puntual y documentar por qué es segura en ese contexto**.
 
 ```rust
 // Rust que C puede llamar:
-// 1. #[no_mangle]: desactiva name-mangling de Rust
+// 1. #[unsafe(no_mangle)]: desactiva name-mangling de Rust
+//    (en edición 2024 el atributo va envuelto en `unsafe(...)` porque un nombre
+//     de símbolo duplicado en el linker es UB)
 // 2. extern "C": usa la calling convention de C (registros, stack order)
 // 3. pub: visible para el linker
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn sumar(a: i32, b: i32) -> i32 {
     a + b
 }
@@ -133,15 +138,17 @@ pub extern "C" fn sumar(a: i32, b: i32) -> i32 {
 // int resultado = sumar(3, 4);  // 7
 ```
 
-Sin `#[no_mangle]`, el compilador genera nombres como `_ZN7mytool5sumar17h3a1b2c3d4e5f6g7hE`
+Sin `#[unsafe(no_mangle)]` (`#[no_mangle]` en ediciones anteriores), el compilador genera nombres como `_ZN7mytool5sumar17h3a1b2c3d4e5f6g7hE`
 que C no puede usar. Sin `extern "C"`, la calling convention puede diferir y los
 argumentos llegan en el orden o registros equivocados.
 
 ### Llamar a C desde Rust
 
 ```rust
-// Declarar funciones C que queremos usar
-extern "C" {
+// Declarar funciones C que queremos usar.
+// Edición 2024: el bloque se escribe `unsafe extern`, porque al declarar firmas
+// externas *tú* garantizas que coinciden con las reales.
+unsafe extern "C" {
     fn abs(n: i32) -> i32;
     fn strlen(s: *const std::os::raw::c_char) -> usize;
     fn malloc(size: usize) -> *mut std::os::raw::c_void;
@@ -251,18 +258,18 @@ fn llamar_funcion_c(nombre: &str) {
 unsafe fn c_a_str<'a>(ptr: *const c_char) -> &'a str {
     // SAFETY: ptr debe ser no nulo, NUL-terminado, y válido por 'a
     assert!(!ptr.is_null(), "puntero nulo recibido de C");
-    CStr::from_ptr(ptr)
+    unsafe { CStr::from_ptr(ptr) }
         .to_str()
         .expect("la string de C no es UTF-8 válido")
 }
 
 // Si C puede devolver strings no-UTF-8:
 unsafe fn c_a_string_lossy(ptr: *const c_char) -> String {
-    CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    unsafe { CStr::from_ptr(ptr) }.to_string_lossy().into_owned()
     // Reemplaza bytes inválidos con U+FFFD (el símbolo de reemplazo)
 }
 
-extern "C" { fn funcion_c_que_usa_char_ptr(s: *const c_char); }
+unsafe extern "C" { fn funcion_c_que_usa_char_ptr(s: *const c_char); }
 ```
 
 **Error clásico: pasar `String::as_ptr()` a C**:
@@ -281,7 +288,7 @@ fn correcto(nombre: &str) {
     unsafe { funcion_c_que_usa_char_ptr(c.as_ptr()); }
 }
 
-extern "C" { fn funcion_c_que_usa_char_ptr(s: *const c_char); }
+unsafe extern "C" { fn funcion_c_que_usa_char_ptr(s: *const c_char); }
 ```
 
 ---
@@ -325,19 +332,19 @@ fn crear_objeto_para_c() -> *mut MiStruct {
 // C devuelve el puntero: Rust recupera la propiedad
 unsafe fn liberar_objeto(ptr: *mut MiStruct) {
     if !ptr.is_null() {
-        drop(Box::from_raw(ptr));   // Drop se ejecuta, memoria liberada
+        drop(unsafe { Box::from_raw(ptr) });   // Drop se ejecuta, memoria liberada
     }
 }
 
 // API pública para que C llame:
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn mi_struct_crear() -> *mut MiStruct {
     Box::into_raw(Box::new(MiStruct::new()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn mi_struct_liberar(ptr: *mut MiStruct) {
-    if !ptr.is_null() { drop(Box::from_raw(ptr)); }
+    if !ptr.is_null() { drop(unsafe { Box::from_raw(ptr) }); }
 }
 
 struct MiStruct { valor: i32 }
@@ -354,7 +361,7 @@ C inicializa estructuras con `memset` o `struct_init()`. Para interoperar:
 ```rust
 use std::mem::MaybeUninit;
 
-extern "C" {
+unsafe extern "C" {
     fn inicializar_config(cfg: *mut ConfigC) -> i32;
 }
 
@@ -390,7 +397,7 @@ fn crear_config() -> Result<ConfigC, i32> {
 # Cargo.toml
 [build-dependencies]
 cc      = "1"
-bindgen = "0.70"
+bindgen = "0.72"
 ```
 
 ```rust
@@ -414,6 +421,8 @@ fn main() {
     let bindings = bindgen::Builder::default()
         .header("csrc/buffer.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        // Edición 2024: genera `unsafe extern "C" { ... }` (requiere bindgen 0.71+)
+        .rust_edition(bindgen::RustEdition::Edition2024)
         // Solo incluir lo que necesitamos
         .allowlist_function("buf_.*")
         .allowlist_type("Buf.*")
@@ -570,7 +579,7 @@ pub const BUF_ERR_NULL: c_int  = -1;
 pub const BUF_ERR_RANGE: c_int = -2;
 pub const BUF_ERR_ALLOC: c_int = -3;
 
-extern "C" {
+unsafe extern "C" {
     pub fn buf_crear(len: usize) -> *mut BufHandle;
     pub fn buf_liberar(b: *mut BufHandle);
     pub fn buf_len(b: *const BufHandle) -> usize;
@@ -845,14 +854,14 @@ mod tests {
 [package]
 name    = "safe_ffi"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 thiserror = "2"
 
 [build-dependencies]
 cc      = "1"
-# bindgen = "0.70"   # descomentar cuando uses headers C externos
+# bindgen = "0.72"   # descomentar cuando uses headers C externos
 ```
 
 `build.rs`:
@@ -891,6 +900,7 @@ cargo install bindgen-cli
 
 # Generar bindings manualmente para inspección
 bindgen csrc/buffer.h \
+    --rust-edition 2024 \
     --allowlist-function "buf_.*" \
     --allowlist-type "Buf.*" \
     --allowlist-var "BUF_.*" \
@@ -912,7 +922,7 @@ pub struct BufHandle {
     pub _address: u8,
 }
 
-extern "C" {
+unsafe extern "C" {
     pub fn buf_crear(len: usize) -> *mut BufHandle;
     pub fn buf_liberar(b: *mut BufHandle);
     pub fn buf_len(b: *const BufHandle) -> usize;
@@ -1025,7 +1035,8 @@ pub fn nuevo(longitud: usize) -> Result<Self, ErrorBuffer> {
 /// `ptr` debe ser un puntero válido a un `BufHandle` creado por `buf_crear`
 /// y que no haya sido liberado todavía.
 pub unsafe fn desde_ptr(ptr: *mut raw::BufHandle) -> Self {
-    Buffer { ptr: NonNull::new_unchecked(ptr) }
+    // SAFETY: el llamador garantiza que `ptr` es válido (y por tanto no nulo).
+    Buffer { ptr: unsafe { NonNull::new_unchecked(ptr) } }
 }
 ```
 

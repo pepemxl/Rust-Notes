@@ -220,7 +220,7 @@ url_shortener/
 #### Dependencias Clave (`Cargo.toml`)
 ```toml
 [dependencies]
-axum = { version = "0.7", features = ["ws"] } # WebSocket opcional
+axum = { version = "0.8", features = ["ws"] } # WebSocket opcional
 tokio = { version = "1", features = ["full", "rt-multi-thread", "macros", "time", "fs", "sync"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -238,15 +238,18 @@ tower-http = { version = "0.5", features = ["limit", "trace", "cors"] }
 #### Implementación Detallada (`src/state.rs`)
 ```rust
 use dashmap::DashMap;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 use uuid::Uuid;
 use crate::models::{UrlEntry, ShortCode};
 
-#[async_trait::async_trait] // Requiere async-trait crate o feature en Rust 1.75+
+// `async fn` en traits es estable desde Rust 1.75 (sin crate `async-trait`).
+// Declaramos `-> impl Future + Send` para que los handlers genéricos de Axum
+// (que exigen futures `Send`) acepten cualquier `S: UrlStorage`.
+// Las implementaciones pueden seguir escribiendo `async fn`.
 pub trait UrlStorage: Send + Sync + 'static {
-    async fn save(&self, entry: UrlEntry) -> Result<(), StorageError>;
-    async fn find_by_code(&self, code: &ShortCode) -> Option<UrlEntry>;
-    async fn increment_clicks(&self, code: &ShortCode) -> Option<u64>;
+    fn save(&self, entry: UrlEntry) -> impl Future<Output = Result<(), StorageError>> + Send;
+    fn find_by_code(&self, code: &ShortCode) -> impl Future<Output = Option<UrlEntry>> + Send;
+    fn increment_clicks(&self, code: &ShortCode) -> impl Future<Output = Option<u64>> + Send;
 }
 
 // Implementación en Memoria (Thread-safe)
@@ -263,7 +266,6 @@ impl InMemStorage {
     pub fn with_persister(mut self, p: Arc<dyn Persister>) -> Self { self.persister = Some(p); self }
 }
 
-#[async_trait::async_trait]
 impl UrlStorage for InMemStorage {
     async fn save(&self, entry: UrlEntry) -> Result<(), StorageError> {
         self.map.insert(entry.code.clone(), entry.clone());
@@ -279,6 +281,8 @@ impl UrlStorage for InMemStorage {
 }
 
 // Trait Persistencia (Separación de responsabilidades)
+// Aquí SÍ usamos `async-trait`: el trait se usa como `Arc<dyn Persister>` y los
+// `async fn` nativos todavía no son dyn-compatibles.
 #[async_trait::async_trait]
 trait Persister: Send + Sync {
     async fn persist(&self, map: &DashMap<ShortCode, UrlEntry>) -> Result<(), StorageError>;
@@ -362,7 +366,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/shorten", post(shorten_url))
-        .route("/:code", get(redirect))
+        .route("/{code}", get(redirect))
         .layer(tower_http::trace::TraceLayer::new_for_http()) // Logging requests
         .layer(rate_limit_layer()) // Rate limit global
         .with_state(storage);
@@ -449,7 +453,6 @@ impl PgStorage {
     pub fn new(pool: PgPool) -> Self { Self { pool } }
 }
 
-#[async_trait::async_trait]
 impl UrlStorage for PgStorage {
     async fn save(&self, entry: UrlEntry) -> Result<(), StorageError> {
         sqlx::query!(
@@ -701,7 +704,7 @@ jobs:
 
 ## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
 
-> Los ejemplos de las secciones **1–5 compilan con `rustc 1.81` (edición 2021) usando SOLO `std`** — sin Tokio ni crates externas. Son la versión mínima y verificable de lo que el runtime hace por dentro, perfectos para conectar con el ejercicio *Toykio* de la Semana 9. Las secciones 6–7 (Tokio/Axum) requieren las dependencias del proyecto y se muestran como referencia idiomática.
+> Los ejemplos de las secciones **1–5 compilan con Rust 1.85+ (edición 2024) usando SOLO `std`** — sin Tokio ni crates externas. Son la versión mínima y verificable de lo que el runtime hace por dentro, perfectos para conectar con el ejercicio *Toykio* de la Semana 9. Las secciones 6–7 (Tokio/Axum) requieren las dependencias del proyecto y se muestran como referencia idiomática.
 
 ### 1️⃣ Una `Future` hecha a mano
 
@@ -864,7 +867,7 @@ impl IntoResponse for AppError {
 ### Código & Arquitectura
 - [ ] **Async Correcto:** Sin `.block_on()` en código async. `spawn_blocking` para CPU/Blocking I/O. `join!` para paralelismo en handlers.
 -   [ ] **Send/Sync:** Todas las tareas `spawn` son `Send + 'static`. State (`AppState`) es `Arc<...>` con `Send + Sync`.
--   [ ] **SQLx:** `sqlx::query_as!` en **100%** de queries. `sqlx-data.json` commiteado. Migraciones versionadas. `sqlx::test` o Testcontainers en tests.
+-   [ ] **SQLx:** `sqlx::query_as!` en **100%** de queries. Directorio `.sqlx/` commiteado (antes `sqlx-data.json`). Migraciones versionadas. `sqlx::test` o Testcontainers en tests.
 -   [ ] **Serde:** Modelos usan `flatten`, `rename`, `with`, `skip`, `default` apropiadamente. `DateTime<Utc>` serializado ISO8601 / Unix ts.
 -   [ ] **Error Handling:** `AppError` enum con `thiserror`. `IntoResponse` impl para mapear a `(StatusCode, Json<ErrorBody>)`. No `unwrap` en handlers.
 
@@ -883,7 +886,7 @@ impl IntoResponse for AppError {
 
 ### Proyecto Integrador: `url-shortener`
 - [ ] `POST /shorten` -> `201 Created` + JSON `{ code, short_url }`.
-- [ ] `GET /:code` -> `301 Redirect` + Incremento atómico `clicks`.
+- [ ] `GET /{code}` -> `301 Redirect` + Incremento atómico `clicks`.
 - [ ] `GET /health` / `/ready` / `/metrics` funcionando.
 - [ ] Persistencia **PostgreSQL** (Docker Compose local / Testcontainers CI).
 - [ ] Rate Limiting (ej. 10 req/s/IP) funcional.

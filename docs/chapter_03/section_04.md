@@ -336,7 +336,7 @@ pub async fn middleware_metricas(req: Request, next: Next) -> Response {
     let metodo  = req.method().to_string();
     let ruta    = req.uri().path().to_owned();
 
-    // Anonimizar rutas con parámetros: /ab12Cd → /:codigo
+    // Anonimizar rutas con parámetros: /ab12Cd → /{codigo}
     let ruta_plantilla = anonimizar_ruta(&ruta);
 
     let resp = next.run(req).await;
@@ -359,12 +359,12 @@ pub async fn middleware_metricas(req: Request, next: Next) -> Response {
 }
 
 fn anonimizar_ruta(ruta: &str) -> String {
-    // Convierte /abc123 en /:codigo, /abc123/stats en /:codigo/stats
+    // Convierte /abc123 en /{codigo}, /abc123/stats en /{codigo}/stats
     let partes: Vec<&str> = ruta.trim_start_matches('/').split('/').collect();
     let anonimizadas: Vec<&str> = partes
         .iter()
         .map(|p| if p.len() == 8 && p.chars().all(|c| c.is_alphanumeric()) {
-            ":codigo"
+            "{codigo}"
         } else {
             p
         })
@@ -392,7 +392,7 @@ El output que Prometheus leerá:
 # HELP http_requests_total Total de peticiones HTTP
 # TYPE http_requests_total counter
 http_requests_total{method="POST",route="/shorten",status="201"} 42
-http_requests_total{method="GET",route="/:codigo",status="301"} 189
+http_requests_total{method="GET",route="/{codigo}",status="301"} 189
 
 # HELP http_request_duration_seconds Latencia de peticiones HTTP
 # TYPE http_request_duration_seconds histogram
@@ -853,8 +853,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Endpoints de negocio
         .route("/shorten",       post(acortar_url::<AlmacenPostgres>))
         .route("/urls",          get(listar_urls::<AlmacenPostgres>))
-        .route("/:codigo",       get(redirigir::<AlmacenPostgres>))
-        .route("/:codigo/stats", get(estadisticas::<AlmacenPostgres>))
+        .route("/{codigo}",       get(redirigir::<AlmacenPostgres>))
+        .route("/{codigo}/stats", get(estadisticas::<AlmacenPostgres>))
         .with_state(estado)
         // Endpoints de infraestructura (estado propio, no el del negocio)
         .route("/health",   get(liveness))
@@ -1128,8 +1128,8 @@ docker compose down
 ### Proyecto integrador completo
 
 - [ ] `POST /shorten` → `201 Created` + JSON `{ codigo, url_corta }`.
-- [ ] `GET /:codigo` → `301 Redirect` + incremento atómico de clics en PG.
-- [ ] `GET /:codigo/stats` → JSON con `creada_en` como Unix timestamp (Serde `with`).
+- [ ] `GET /{codigo}` → `301 Redirect` + incremento atómico de clics en PG.
+- [ ] `GET /{codigo}/stats` → JSON con `creada_en` como Unix timestamp (Serde `with`).
 - [ ] `GET /health` → `200 OK`.
 - [ ] `GET /ready` → `200 OK` si BD disponible, `503` si no.
 - [ ] `GET /metrics` → texto Prometheus con `http_requests_total` e histograma.

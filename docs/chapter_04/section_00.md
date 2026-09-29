@@ -162,10 +162,10 @@ fn test_hash_single_file() {
 
 ### 🎯 Conceptos Clave
 
-#### 1. FFI Basics: `extern "C"`, `#[no_mangle]`, `repr(C)`
+#### 1. FFI Basics: `extern "C"`, `#[unsafe(no_mangle)]`, `repr(C)`
 ```rust
 // Rust -> C (Exportar)
-#[no_mangle] // Nombre simbólico exacto "add"
+#[unsafe(no_mangle)] // Nombre simbólico exacto "add" (edición 2024: atributo `unsafe(...)`)
 pub extern "C" fn add(a: i32, b: i32) -> i32 { a + b }
 
 // Structs compartidos (Layout garantizado)
@@ -279,7 +279,7 @@ impl Drop for CryptoBox {
     *   **Ownership**: `JsValue` (GC'd por JS). `Box<[u8]>` -> `Uint8Array` (copia o `take` ownership).
 
 #### 2. Memoria y Performance
-*   **`wee_alloc` / `lol_alloc`**: Allocators pequeños (~1KB) vs `dlmalloc` default. `#[global_allocator] static ALLOC: wee_alloc::WeeAlloc = ...`.
+*   **`lol_alloc`**: Allocator pequeño (~1KB) vs `dlmalloc` default, solo para Wasm de un hilo. *Evita `wee_alloc`: sin mantenimiento y con fugas de memoria conocidas.*
 *   **`#[wasm_bindgen(js_name = "...")]`**: Renombrar exports.
 *   **`#[wasm_bindgen(getter, setter)]`**: Props en structs exportados.
 *   **Paralelismo**: **`wasm-bindgen-rayon`** (usa Web Workers). Requiere `SharedArrayBuffer` -> Headers `COOP`/`COEP` en servidor HTTP.
@@ -398,7 +398,7 @@ fn parse_number(input: &str) -> IResult<&str, u64> {
 *   **Ventaja:** Gramática legible, separada del código, error reporting automático excelente. **Más lento que `nom` optimizado a mano**, pero desarrollo más rápido.
 
 #### 3. `regex` / `aho-corasick` (Búsqueda/Extracción Simple)
-*   **`regex`**: `Regex::new(r"(\d{4}-\d{2}-\d{2})")?`. `captures_iter`. **Compilación costosa** -> `lazy_static!` / `once_cell`.
+*   **`regex`**: `Regex::new(r"(\d{4}-\d{2}-\d{2})")?`. `captures_iter`. **Compilación costosa** -> compílala una vez con `std::sync::LazyLock` (stable desde 1.80; reemplaza a `lazy_static!` / `once_cell`).
 *   **`aho-corasick`**: Búsqueda **múltiples patrones** simultánea (O(n + m + z)). Ideal para "buscar 10k IPs en log de 1GB". `AhoCorasick::new(patterns)`.
 
 #### 4. `encoding_rs` (Non-UTF8)
@@ -464,7 +464,7 @@ fn bench_nginx_parsing(c: &mut Criterion) {
 | Semana | Lectura Oficial / Docs | Video / Blog Profundo | Práctica Clave |
 | :--- | :--- | :--- | :--- |
 | **13** | **Clap Derive Tutorial** (docs.rs/clap) <br> **Ratatui Tutorial** (ratatui.rs) | *Let's Get Rusty: Clap v4* | **`mytool` CLI** (Subcommands, `indicatif`, Completions, Man pages, `xtask`) |
-| **14** | **The Book Cap 19** (FFI) <br> **Rust FFI Omnibus** (Michael Bryan) <br> **Rustonomicon (FFI/Unsafe)** | **Jon Gjengset: "Crust of Rust: Unsafe / FFI"** | **Wrapper `libsodium`/`sqlite`** (`bindgen`, `build.rs`, Safe API, Tests vectores oficiales) |
+| **14** | **The Book Cap 20.1** (Unsafe Rust / FFI) <br> **Rust FFI Omnibus** (Michael Bryan) <br> **Rustonomicon (FFI/Unsafe)** | **Jon Gjengset: "Crust of Rust: Unsafe / FFI"** | **Wrapper `libsodium`/`sqlite`** (`bindgen`, `build.rs`, Safe API, Tests vectores oficiales) |
 | **15** | **Rust Wasm Book** (rustwasm.github.io/book) <br> **Leptos Book** / **Yew Tutorial** | *Faster Web Apps with Rust & Wasm (Lin Clark)* | **Mandelbrot Explorer** (Wasm + Rayon Workers + Leptos/Vanilla JS, Canvas, Bench vs JS) |
 | **16** | **Nom Tutorial** (github.com/Geal/nom) <br> **Pest Book** (pest.rs/book) <br> **Regex/aho-corasick docs** | *Parsing Logs at Scale (RustConf talks)* | **`logparser` CLI** (Nom/Pest, Streaming, Multi-format, Filter/Aggregate, Bench vs `grep`/`jq`) |
 
@@ -479,7 +479,7 @@ fn bench_nginx_parsing(c: &mut Criterion) {
 | **FFI** | **UB Silencioso** (Alignment, Layout, Drop) | Crashes aleatorios, corrupción memoria, solo en Release. | **`#[repr(C)]` SIEMPRE**. `std::mem::align_of::<T>()`. **No `Drop` en tipos `#[repr(C)]` pasados a C** (C no llama Drop). Usa `Box::into_raw` / `from_raw` para ownership transfer. `bindgen` `--no-layout-tests` desactiva checks -> **NO LO HAGAS**. |
 | **FFI** | Strings: `String` vs `CString` | "Invalid UTF-8" en Rust / Truncado en C (NUL byte medio). | **Rust->C**: `CString::new(rust_str).unwrap().into_raw()` (caller `free` con `libc::free` o wrapper `free_string`). **C->Rust**: `unsafe { CStr::from_ptr(c_ptr).to_string_lossy().into_owned() }`. |
 | **Wasm** | `wasm-bindgen-rayon` no paraleliza / panica | Un solo hilo usado / "Thread spawn failed". | **Headers HTTP Obligatorios**: `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`. Servir con `vite`/`wasm-pack` plugin o config manual nginx/apache. `rayon::ThreadPoolBuilder` custom stack size. |
-| **Wasm** | Tamaño `.wasm` enorme ( > 1MB ) | Carga lenta, "Application too large". | `wasm-opt -Oz` (Binaryen). `lto = true`, `opt-level = "z"` (o `"s"`), `codegen-units = 1`, `strip = true` en `Cargo.toml` `[profile.release]`. `wee_alloc`. Evitar `std` grande (`panic = "abort"`). |
+| **Wasm** | Tamaño `.wasm` enorme ( > 1MB ) | Carga lenta, "Application too large". | `wasm-opt -Oz` (Binaryen). `lto = true`, `opt-level = "z"` (o `"s"`), `codegen-units = 1`, `strip = true` en `Cargo.toml` `[profile.release]`. `lol_alloc`. Evitar `std` grande (`panic = "abort"`). |
 | **Parsing (Nom)** | Backtracking exponencial / Stack Overflow | Parser cuelga en input malicioso/grande. | **Evita `alt` ambiguo** sin `peek`. Usa `complete` combinators (fallan rápido si input incompleto) vs `streaming`. `nom::branch::alt` ordena alternativas por especificidad. |
 | **Parsing (General)** | Manejo Errores Pobre | "Parse error at byte 4096" (inútil). | **`nom::error::VerboseError`** o **`pest`** (mejores errores). Añade contexto: `context("parse nginx line", parse_nginx)`. En CLI: muestra línea + columna + snippet. |
 
@@ -487,15 +487,15 @@ fn bench_nginx_parsing(c: &mut Criterion) {
 
 ## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
 
-> Las secciones **1–5 compilan y corren con `rustc 1.81` (edición 2021) usando SOLO `std`** — sin `clap`, `nom`, `bindgen` ni `wasm-bindgen`. Cubren el núcleo verificable del mes: **FFI/`unsafe` seguro** y **parsing zero-copy a mano**. Las secciones 6–7 (clap / wasm-bindgen) requieren crates externas y se muestran como referencia idiomática.
+> Las secciones **1–5 compilan y corren con Rust 1.85+ (edición 2024) usando SOLO `std`** — sin `clap`, `nom`, `bindgen` ni `wasm-bindgen`. Cubren el núcleo verificable del mes: **FFI/`unsafe` seguro** y **parsing zero-copy a mano**. Las secciones 6–7 (clap / wasm-bindgen) requieren crates externas y se muestran como referencia idiomática.
 
-### 1️⃣ Exportar a C: `extern "C"`, `#[no_mangle]`, `#[repr(C)]`
+### 1️⃣ Exportar a C: `extern "C"`, `#[unsafe(no_mangle)]`, `#[repr(C)]`
 
 ```rust
 #[repr(C)] // layout idéntico a C: campos en orden, sin reordenado del compilador
 struct Punto { x: f64, y: f64 }
 
-#[no_mangle] // el símbolo se llama exactamente "suma" (sin name-mangling de Rust)
+#[unsafe(no_mangle)] // el símbolo se llama exactamente "suma" (sin name-mangling de Rust)
 pub extern "C" fn suma(a: i32, b: i32) -> i32 { a + b }
 ```
 

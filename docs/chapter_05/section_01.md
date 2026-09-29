@@ -632,6 +632,9 @@ impl ContadorSharded {
 use async_trait::async_trait;
 use std::sync::Arc;
 
+// `async-trait` sigue siendo necesario aquí porque usamos `Arc<dyn AlmacenUrls>`:
+// los `async fn` nativos en traits (Rust 1.75+) aún no son dyn-compatibles.
+// Si solo usaras generics, bastaría con `async fn` nativo sin el atributo.
 #[async_trait]
 pub trait AlmacenUrls: Send + Sync {
     async fn guardar(&self, url: &EstadoUrl) -> Result<(), String>;
@@ -785,7 +788,7 @@ url_shortener_v3/
 [package]
 name    = "url-shortener-v3"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 tokio        = { version = "1", features = ["full"] }
@@ -1060,6 +1063,9 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use std::sync::Arc;
 
+// `async-trait` sigue siendo necesario aquí porque usamos `Arc<dyn AlmacenUrls>`:
+// los `async fn` nativos en traits (Rust 1.75+) aún no son dyn-compatibles.
+// Si solo usaras generics, bastaría con `async fn` nativo sin el atributo.
 #[async_trait]
 pub trait AlmacenUrls: Send + Sync {
     async fn guardar(&self, url: EntradaUrl) -> Result<(), String>;

@@ -266,7 +266,7 @@ fn bench_counters(c: &mut Criterion) {
 | **`Cow<'a, T>` (Clone on Write)** | `Cow::Borrowed(&T)` barato. `to_mut()` clona solo si hay que mutar. | Ideal para args de función que *a veces* modifican, *a veces* no. `fn process(s: Cow<str>)`. |
 | **String Interning** (`lasso`, `intaglio`) | Deduplicación strings idénticos (`&'static str` o `u32` ID). | Lookup O(1) global. Útil en parsers, ASTs, logging, símbolos. |
 | **`ahash` / `foldhash` (Hasher Rápido)** | `HashMap`/`HashSet` default `SipHash` (seguro DoS). **`ahash`** usa AES-NI (hardware) -> **2x-5x más rápido**. | **NO** para claves expuestas a atacantes (DoS). **SÍ** para internos, caches, índices. `type FastMap<K,V> = HashMap<K,V,BuildHasherDefault<AHasher>>;` |
-| **SIMD (`std::simd` nightly / `packed_simd` / `wide`)** | Procesar 4/8/16 elementos por instrucción (AVX2/AVX-512/NEON). | `std::simd` (nightly, estableciendo). `packed_simd` (mantenido). Requiere `target-cpu=native` o `RUSTFLAGS="-C target-cpu=native"`. |
+| **SIMD (`std::simd` nightly / `wide` / `std::arch`)** | Procesar 4/8/16 elementos por instrucción (AVX2/AVX-512/NEON). | `std::simd` (nightly, estableciendo). `wide` (stable, portable). `std::arch` (intrínsecos por plataforma, stable). *`packed_simd` está abandonado: no lo uses.* Requiere `target-cpu=native` o `RUSTFLAGS="-C target-cpu=native"`. |
 | **Branchless / `likely`/`unlikely`** | Predicción de saltos. `#[cold]` en paths de error. `core::hint::likely()`. | Micro-optimización. Verifica en asm (`cargo asm`). |
 
 ### 🛠️ Proyecto: **Optimización Real (Log Parser v2 o Mandelbrot v2)**
@@ -297,7 +297,7 @@ fn bench_counters(c: &mut Criterion) {
 > *Rust sin OS. Determinismo. Hardware real.*
 
 **Conceptos Clave:**
-*   **`#![no_std]`**: Sin `std`, solo `core` + `alloc` (opcional). `panic_handler` propio (`defmt`/`probe-run`).
+*   **`#![no_std]`**: Sin `std`, solo `core` + `alloc` (opcional). `panic_handler` propio (`defmt` + `panic-probe`, logs vía `probe-rs run`).
 *   **`embassy`**: Executor async **embarcado**. Tasks = State machines. **Sin `Pin`/`Unpin` manual** (embassy macros).
 *   **HAL (Hardware Abstraction Layer):** `embassy-stm32`, `embassy-rp` (RP2040), `esp-hal`.
 *   **Periféricos Async:** `uart.read(&mut buf).await`, `i2c.write(addr, &data).await`, `adc.read().await`.
@@ -417,7 +417,7 @@ my-ecosystem/
 
 ## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
 
-> Todos los ejemplos **compilan y corren con `rustc 1.81` (edición 2021) usando SOLO `std`** — incluyendo el actor (con `std::sync::mpsc` + `std::thread`) y el contador concurrente. No requieren `tokio`, `crossbeam`, `rayon` ni `criterion`. Los marcados `// ❌ NO COMPILA` demuestran las garantías que el sistema de tipos te regala.
+> Todos los ejemplos **compilan y corren con Rust 1.85+ (edición 2024) usando SOLO `std`** — incluyendo el actor (con `std::sync::mpsc` + `std::thread`) y el contador concurrente. No requieren `tokio`, `crossbeam`, `rayon` ni `criterion`. Los marcados `// ❌ NO COMPILA` demuestran las garantías que el sistema de tipos te regala.
 
 ### 1️⃣ Newtype: tipos fuertes con validación
 
@@ -616,7 +616,7 @@ assert!(matches!(normalizar("con espacio"),  Cow::Owned(_)));
 #### **A) Embedded (Embassy)**
 - [ ] **Hardware:** RP2040/STM32 + Sensor I2C/SPI + Actuador (LED/Display/Motor).
 - [ ] **Architecture:** 3+ Tasks Embassy (`spawner.spawn`), Canales `embassy_sync::channel`.
-- [ ] **Observabilidad:** `defmt` + `probe-rs` / `probe-run` logging en host.
+- [ ] **Observabilidad:** `defmt` + `probe-rs run` logging en host.
 - [ ] **CI:** Compila `--target thumbv...`. Corre en **QEMU** (test headless) en GitHub Actions.
 - [ ] **Seguridad:** `#[deny(unsafe_op_in_unsafe_fn)]`, `unsafe` solo en PAC/HAL bindings.
 

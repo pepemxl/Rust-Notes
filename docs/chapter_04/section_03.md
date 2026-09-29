@@ -104,7 +104,7 @@ cd mandelbrot-wasm
 [package]
 name    = "mandelbrot-wasm"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [lib]
 # cdylib: biblioteca dinámica para C (lo que Wasm requiere)
@@ -411,15 +411,26 @@ Reducir el tamaño del runtime:
 ```toml
 [dependencies]
 # Allocator pequeño (~1 KB vs ~10 KB de dlmalloc por defecto)
-wee_alloc = "0.4"
+lol_alloc = { version = "0.4", optional = true }
 ```
 
 ```rust
 // En lib.rs:
-#[cfg(feature = "wee_alloc")]
+#[cfg(all(target_arch = "wasm32", feature = "lol_alloc"))]
+use lol_alloc::{AssumeSingleThreaded, FreeListAllocator};
+
+// SAFETY: el módulo Wasm corre en un solo hilo (sin Web Workers compartiendo memoria).
+#[cfg(all(target_arch = "wasm32", feature = "lol_alloc"))]
 #[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+static ALLOC: AssumeSingleThreaded<FreeListAllocator> =
+    unsafe { AssumeSingleThreaded::new(FreeListAllocator::new()) };
 ```
+
+> ⚠️ **No uses `wee_alloc`.** Aparece en muchos tutoriales antiguos, pero está sin
+> mantenimiento desde 2022 y tiene fugas de memoria conocidas. `lol_alloc` es la
+> alternativa pequeña; si usas hilos (`wasm-bindgen-rayon`, siguiente sección), quédate
+> con el allocator por defecto, porque `AssumeSingleThreaded` no es seguro con varios hilos.
+> Mide antes: con `wasm-opt -Oz` la ganancia del allocator suele ser de pocos KB.
 
 Resultados típicos para un módulo de tamaño medio:
 
@@ -427,7 +438,7 @@ Resultados típicos para un módulo de tamaño medio:
 Sin optimizar (debug):   ~8 MB
 Release sin wasm-opt:    ~350 KB
 Release + wasm-opt -Oz:  ~150 KB
-+ wee_alloc:             ~140 KB
++ lol_alloc:             ~140 KB
 + panic=abort:           ~120 KB
 ```
 
@@ -719,7 +730,7 @@ mod tests {
 [package]
 name    = "mandelbrot-wasm"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -23,8 +23,8 @@ rustc --version
 ```
 y deberemos ver algo como lo siguiente:
 
-```bash
-rustc 1.61.0 (fe5b13d68 2022-05-18)
+```text
+rustc 1.96.0 (ac68faa20 2026-05-25)
 ```
 
 Hay que notar que para cada sistema operativo tenemos tres versiones de Rust,
@@ -71,11 +71,11 @@ fn main(){}
 
 el archivo `Cargo.toml` contiene información del paquete que acabamos de crear.
 
-```rust
+```toml
 [package]
 name = "example_00"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -88,11 +88,11 @@ una vez creado vamos dentro de la carpeta `example_00` corremos la instrucción
 
 con una salida como la siguiente:
 
-```rust
-D:\Rust-Notes\chapter_01\codes\example_00> cargo run
-   Compiling example_00 v0.1.0 (D:\Rust-Notes\chapter_01\codes\example_00)
-    Finished dev [unoptimized + debuginfo] target(s) in 0.36s
-     Running `target\debug\example_00.exe`
+```text
+~/Rust-Notes/chapter_01/codes/example_00$ cargo run
+   Compiling example_00 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_00)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running `target/debug/example_00`
 ```
 
 es decir, una función `main`, sin parámetros con las llaves sin regresar nada.
@@ -101,25 +101,25 @@ Con ello tenemos el código más pequeño que podemos crear en Rust.
 
 Siempre necesitamos una funcion `main`, en caso de no contar con la función `main` tendriamos un error como el siguiente:
 
-```rust
-Rust-Notes\chapter_01\codes\example_00> cargo run
-   Compiling example_00 v0.1.0 (D:\Rust-Notes\chapter_01\codes\example_00)
+```text
+~/Rust-Notes/chapter_01/codes/example_00$ cargo run
+   Compiling example_00 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_00)
 error[E0601]: `main` function not found in crate `example_00`
- --> src\main.rs:2:2
+ --> src/main.rs:1:2
   |
-2 | }
-  |  ^ consider adding a `main` function to `src\main.rs`    
+1 |
+  | ^ consider adding a `main` function to `src/main.rs`
 
 For more information about this error, try `rustc --explain E0601`.
-error: could not compile `example_00` due to previous error
+error: could not compile `example_00` (bin "example_00") due to 1 previous error
 ```
 
 corriendo `rustc --explain E0601`
 
-```bash
+```text
 No `main` function was found in a binary crate.
 
-To fix this error, add a `main` function
+To fix this error, add a `main` function:
 ```
 
 ## Hello World
@@ -145,10 +145,10 @@ fn main() {
 
 vamos dentro de la carpeta `example_01` y ejecutemos `cargo run` entonces tendremos una salida como la siguiente:
 
-```bash
-Compiling example_01 v0.1.0 (D:\Rust-Notes\chapter_01\codes\example_01)
-    Finished dev [unoptimized + debuginfo] target(s) in 1.56s
-     Running `target\debug\example_01.exe`
+```text
+   Compiling example_01 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_01)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running `target/debug/example_01`
 Hello, world!
 ```
 
@@ -159,22 +159,22 @@ fn main() {
 }
 ```
 
-digamos archivo `codigo_fuente.rs` y ejecutamos `rustc codigo_fuente.rs` esto generara dos archivos un ejecutable .exe
-y un arhivo .pdb, más adelante hablaremos de estos archivos.
+digamos archivo `codigo_fuente.rs` y ejecutamos `rustc codigo_fuente.rs`: esto generará un ejecutable
+(`codigo_fuente` en Linux/macOS; en Windows `codigo_fuente.exe` más un archivo `.pdb` con símbolos de depuración).
 
 Podemos ejecutar simplemente 
-```bash
-D:\Rust-Notes\chapter_01\codes\example_02> .\codigo_fuente.exe
+```text
+~/Rust-Notes/chapter_01/codes/example_02$ ./codigo_fuente
 Hello, world!
 ```
 
 
-Cosas a destacar aqui es que `println` no es una función si no se trata de una macro, para indicar que una macro será utilizada se utiliza el simbolo de admiración `!`, como en el ejemplo, al igual que en C/C++, las macros son replazadas por su correspondiente código en tiempo de compilación.
+Cosas a destacar aqui es que `println` no es una función si no se trata de una macro, para indicar que una macro será utilizada se utiliza el simbolo de admiración `!`, como en el ejemplo, al igual que en C/C++, las macros son reemplazadas por su correspondiente código en tiempo de compilación.
 
 
 ### Literal String
 
-En Rust llamaremos literal string, a las cadenas de caracteres que se definan o utilizen en el código fuente, mientras que no literal, significara todos esos string que son son definidos en tiempo de ejecución a traves de lectura de archivo o al interactura con los usuarios, o copiar texto de un literal string.
+En Rust llamaremos literal string, a las cadenas de caracteres que se definan o utilizen en el código fuente, mientras que no literal, significara todos esos string que son definidos en tiempo de ejecución a traves de lectura de archivo o al interactuar con los usuarios, o copiar texto de un literal string.
 
 ## Imprimiendo combinaciones de literal strings
 
@@ -184,7 +184,7 @@ Podemos escribir varias cadenas de caracteres en la misma sentencia, al estilo p
 print!("{}, {}", "Hola", "Mundo!");
 ```
 salida:
-```bash
+```text
 Hola, Mundo!
 ```
 
@@ -200,7 +200,7 @@ Podemos agregar saltos de linea, simplemente agregando `\n`.
 print!("Linea 1\nLinea 2\nLinea 3");
 ```
 salida:
-```bash
+```text
 Linea 1
 Linea 2
 Linea 3
@@ -216,11 +216,11 @@ println!("Número pi: {}","3.14159");
 println!("Número pi: {}",3.14159);
 ```
 salida:
-```bash
-D:\Rust-Notes\chapter_01\codes\example_03> cargo run
-   Compiling example_03 v0.1.0 (D:\Rust-Notes\chapter_01\codes\example_03)
-    Finished dev [unoptimized + debuginfo] target(s) in 1.05s
-     Running `target\debug\example_03.exe`
+```text
+~/Rust-Notes/chapter_01/codes/example_03$ cargo run
+   Compiling example_03 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_03)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.05s
+     Running `target/debug/example_03`
 Número pi: 3.14159
 Número pi: 3.14159
 Número pi: 3.14159
@@ -240,11 +240,11 @@ El comportamiento de la combinación de literal string con literal number es un 
 ```
 
 salida:
-```bash
-D:\Rust-Notes\chapter_01\codes\example_04> cargo run
-   Compiling example_04 v0.1.0 (D:\Rust-Notes\chapter_01\codes\example_04)
-    Finished dev [unoptimized + debuginfo] target(s) in 0.69s
-     Running `target\debug\example_04.exe`
+```text
+~/Rust-Notes/chapter_01/codes/example_04$ cargo run
+   Compiling example_04 v0.1.0 (~/Rust-Notes/chapter_01/codes/example_04)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.69s
+     Running `target/debug/example_04`
 Número pi: 3.14159
 Número pi: 3.14159
 Número pi: 3.14159
@@ -253,7 +253,7 @@ Número pi: 3.14159
 ```
 
 Donde podemos ver que para la combinación de literal strings 
-`"Número pi: {}","0003.14159"`, su salida fue tan solo sustituir las llaves por el texto, muientras que en la combinación `"Número pi: {}",0003.14159`, los ceros al inicio del número fueron ignorados.
+`"Número pi: {}","0003.14159"`, su salida fue tan solo sustituir las llaves por el texto, mientras que en la combinación `"Número pi: {}",0003.14159`, los ceros al inicio del número fueron ignorados.
 
 
 ## Comentarios
@@ -287,6 +287,7 @@ Los siguientes dos ejemplos son dos diferencias en los comentarios que se hacen 
 ```
 
 ```rust
+// ❌ NO COMPILA en Rust: el comentario anidado queda sin cerrar
 /* Este es un comentario /* invalido  para
   varias
   lineas 

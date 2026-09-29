@@ -644,7 +644,7 @@ jobs:
 | Semana | Lectura "The Book" | Video Profundo | Práctica Clave |
 | :--- | :--- | :--- | :--- |
 | **5** | **Cap 10** (Generics, Traits, Lifetimes) | **Jon Gjengset: "Crust of Rust: Lifetimes"** | `Cache<K,V>` + `TimeProvider` Mock |
-| **6** | **Cap 19** (Advanced Traits) <br> *Rust Design Patterns: Traits* | Jon Gjengset: "Crust of Rust: Traits" (Opcional) | `ByteBuffer` (`Deref`, `Read`, `Write`, `From`) |
+| **6** | **The Book Cap 20.2** (Advanced Traits) <br> *Rust Design Patterns: Traits* | Jon Gjengset: "Crust of Rust: Traits" (Opcional) | `ByteBuffer` (`Deref`, `Read`, `Write`, `From`) |
 | **7** | **Cap 15** (Smart Pointers) | **Jon Gjengset: "Crust of Rust: Interior Mutability"** | **Grafo `Rc<RefCell<Node>>` + `Weak`** |
 | **8** | **Cap 11** (Testing) <br> **Cap 14** (Cargo/Crates.io) | *The Rust Performance Book* (Benchmarking) | **`config-loader` Crate Completa + CI + Publish** |
 
@@ -666,7 +666,7 @@ jobs:
 
 ## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
 
-> Todos los ejemplos **compilan con `rustc 1.81` (edición 2021)**. Los marcados con `// ❌ NO COMPILA` son errores *intencionales*: léelos como una lección sobre lo que el compilador te impide hacer.
+> Todos los ejemplos **compilan con Rust 1.85+ (edición 2024)**. Los marcados con `// ❌ NO COMPILA` son errores *intencionales*: léelos como una lección sobre lo que el compilador te impide hacer.
 
 ### 1️⃣ Generics + trait bounds + monomorphization
 

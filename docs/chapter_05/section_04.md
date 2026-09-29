@@ -124,7 +124,7 @@ info!("Temperatura: {} °C", temperatura);
 warn!("Batería baja: {}%", nivel_bateria);
 error!("Error I2C: {:?}", resultado_error);
 
-// En el host (vía probe-rs / probe-run):
+// En el host (vía `probe-rs run`):
 // 00:01.234 INFO  Temperatura: 23 °C
 // 00:02.001 WARN  Batería baja: 12%
 
@@ -167,7 +167,8 @@ EMBASSY: TASKS = STATE MACHINES, NO OS THREADS
 rustup target add thumbv6m-none-eabi
 
 # Herramientas de flash y debug
-cargo install probe-rs-cli    # o probe-run
+cargo install probe-rs-tools --locked  # incluye probe-rs, cargo-flash y cargo-embed
+                                        # (probe-run y probe-rs-cli están obsoletos)
 cargo install elf2uf2-rs      # para Pico sin probe JTAG
 ```
 
@@ -177,7 +178,7 @@ cargo install elf2uf2-rs      # para Pico sin probe JTAG
 [package]
 name    = "weather-station"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 embassy-executor  = { version = "0.6", features = ["arch-cortex-m", "executor-thread"] }
@@ -410,7 +411,7 @@ members  = ["builder-macro", "builder", "builder-tests"]
 [package]
 name    = "builder-macro"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [lib]
 proc-macro = true   # CLAVE: este crate es un plugin del compilador
@@ -427,7 +428,7 @@ proc-macro2 = "1"
 [package]
 name    = "builder"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 builder-macro = { path = "../builder-macro" }
@@ -985,7 +986,7 @@ debug         = 0
 [package]
 name    = "mi-core"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [lints]
 workspace = true   # hereda workspace.lints
@@ -1042,6 +1043,8 @@ pub enum ErrorDominio {
 
 // core define LA INTERFAZ; db, api etc. implementan o usan la interfaz.
 // Nunca al revés.
+// `async-trait` es necesario porque `api` usa `Arc<dyn RepositorioUrls>`
+// (los `async fn` nativos en traits aún no son dyn-compatibles).
 #[async_trait]
 pub trait RepositorioUrls: Send + Sync + 'static {
     async fn guardar(&self, url: &UrlCorta) -> Result<(), ErrorDominio>;

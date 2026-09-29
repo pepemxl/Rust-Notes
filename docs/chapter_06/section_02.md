@@ -119,15 +119,18 @@ uuid        = { version = "1",     features = ["v7", "serde"] }
 time        = { version = "0.3",   features = ["serde", "formatting"] }
 
 # DB (solo crates/db y crates/server los activan)
+# Sin default-features hay que pedir `macros` (query!) y `migrate` explícitamente.
+# "offline" ya no existe como feature: el modo offline usa `.sqlx/` + SQLX_OFFLINE=true.
+# Usamos `time` (no `chrono`) porque el dominio trabaja con `time::OffsetDateTime`.
 sqlx = { version = "0.8", default-features = false, features = [
-    "runtime-tokio", "postgres", "chrono", "uuid", "json", "offline",
+    "runtime-tokio", "tls-rustls", "postgres", "macros", "migrate", "time", "uuid", "json",
 ] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
 # HTTP (solo crates/server)
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.8", features = ["ws"] }
 
 # Observabilidad
 tracing             = "0.1"
@@ -181,7 +184,7 @@ framework HTTP elijas.
 [package]
 name    = "linkmetrics-core"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 serde      = { workspace = true }
@@ -667,7 +670,7 @@ mod tests {
 [package]
 name    = "linkmetrics-db"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 linkmetrics-core = { path = "../core" }
@@ -1065,7 +1068,7 @@ Los comandos de gestión de usuarios vendrán en la Semana 23.
 [package]
 name    = "linkmetrics-cli"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "lm"
@@ -1251,14 +1254,14 @@ volumes:
 # Etapa 1: planificador de dependencias (cargo-chef)
 # Construye solo las dependencias, aprovechando el caché de Docker layers.
 # Clave: las dependencias cambian raramente; el código cambia a cada commit.
-FROM rust:1.81-slim-bookworm AS planner
+FROM rust:1.85-slim-bookworm AS planner
 WORKDIR /app
 RUN cargo install cargo-chef --locked
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Etapa 2: constructor de dependencias (caché)
-FROM rust:1.81-slim-bookworm AS deps
+FROM rust:1.85-slim-bookworm AS deps
 WORKDIR /app
 RUN cargo install cargo-chef --locked
 COPY --from=planner /app/recipe.json recipe.json
@@ -1266,7 +1269,7 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 # Etapa 3: constructor del binario
-FROM rust:1.81-slim-bookworm AS builder
+FROM rust:1.85-slim-bookworm AS builder
 WORKDIR /app
 
 # Dependencias del sistema para SQLx (libssl, libpq)
@@ -1305,7 +1308,7 @@ ENTRYPOINT ["/app/server"]
 
 ```dockerfile
 # infra/Dockerfile.dev — para desarrollo local con hot-reload
-FROM rust:1.81-slim-bookworm
+FROM rust:1.85-slim-bookworm
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -4,30 +4,29 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title> Video Frame Analysis</title>
+        <link rel="stylesheet" href="style.css">
     </head>
     <body>
-        <video id="video" width="720" height="1280" controls>
-            <source src="/static/video.mp4" type="video/mp4">
-            Your Browser does not support video tag
-        </video>
-        <div>
-            <button id="prevFrame">Previous Frame</button>
-            <button id="nextFrame">Next Frame</button>
+        <div class="container">
+            <h1>Video Player</h1>
+            <div class="controls">
+                <select name="1" id="videoSelector">
+                    <option value="video1.mp4">Video 1</option>
+                    <option value="video2.mp4">Video 2</option>
+                    <option value="video3.mp4">Video 3</option>
+                </select>
+                <button id="prevFrame">Prev Frame</button>
+                <button id="play">Play</button>
+                <button id="nextFrame">Next Frame</button>
+                <button id="play2x">Play 2x</button>
+                <button id="play5x">Play 5x</button>
+            </div>
+            <!--<video id="video" width="720" height="1280" controls>-->
+            <video id="video" width="360" height="640" controls></video>
+                <source src="/static/video.mp4" type="video/mp4">
+                Your Browser does not support video tag
+            </video>
         </div>
-        <script>
-            const video = document.getElementById('video');
-            const prevFrameBtn = document.getElementById('prevFrame');
-            const nextFrameBtn = document.getElementById('nextFrame');
-            const frameRate = 24.75;
-            const frameTime = 1/frameRate;
-            prevFrameBtn.addEventListener('click', ()=>{
-                video.pause();
-                video.currentTime = Math.max(0, video.currentTime - frameTime);
-            });
-            nextFrameBtn.addEventListener('click', ()=>{
-                video.pause();
-                video.currentTime = Math.min(video.duration, video.currentTime + frameTime);
-            });
-        </script>
+        <script src="script.js"></script>
     </body>
 </html>

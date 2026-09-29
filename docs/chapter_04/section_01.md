@@ -331,7 +331,7 @@ cd mytool
 [package]
 name    = "mytool"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "mytool"
@@ -785,7 +785,7 @@ resolver = "2"
 [package]
 name    = "xtask"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 clap_complete = "4"

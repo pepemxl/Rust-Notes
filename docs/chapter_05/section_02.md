@@ -769,7 +769,7 @@ sharded_counter/
 [package]
 name    = "sharded-counter"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 parking_lot  = "0.12"

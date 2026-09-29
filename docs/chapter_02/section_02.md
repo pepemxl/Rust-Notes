@@ -948,7 +948,7 @@ cargo clippy
 - [ ] Entiendo el patrón RAII con `Drop` y sé usar `std::mem::drop` para drop temprano.
 - [ ] Implemento al menos `Add`, `Sub`, `Index` para un tipo propio.
 - [ ] El ejercicio `ByteBuffer` compila, todos los tests pasan y `clippy` da 0 warnings.
-- [ ] Completo la lectura del Cap. 19 de The Book (Advanced Traits).
+- [ ] Completo la lectura del Cap. 20.2 de The Book (Advanced Traits; era el Cap. 19 en ediciones anteriores).
 
 > **Siguiente paso:** Semana 7 — [Smart Pointers e Interior Mutability: `Box`, `Rc`,
 > `Arc`, `RefCell`, `Mutex`](section_03.md).

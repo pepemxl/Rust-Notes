@@ -1,0 +1,6 @@
+version: 3.2
+
+services:
+  rust-video-player:
+    buid: 
+    image: rust-video-player-dev

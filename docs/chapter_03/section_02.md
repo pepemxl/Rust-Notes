@@ -426,7 +426,7 @@ let estado = Arc::new(EstadoApp {
 let app: Router = Router::new()
     .route("/health",   get(chequeo_salud))
     .route("/shorten",  post(acortar_url))
-    .route("/:codigo",  get(redirigir))
+    .route("/{codigo}",  get(redirigir))
     .with_state(estado);  // Registra el estado; cada handler recibe State(Arc<...>)
 
 async fn chequeo_salud() -> &'static str { "OK" }
@@ -560,7 +560,7 @@ cd url_shortener
 [package]
 name = "url_shortener"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 axum        = "0.7"
@@ -834,7 +834,7 @@ pub async fn acortar_url<S: AlmacenUrls>(
     ))
 }
 
-/// GET /:codigo — Redirige a la URL original
+/// GET /{codigo} — Redirige a la URL original
 pub async fn redirigir<S: AlmacenUrls>(
     State(estado): State<Arc<EstadoApp<S>>>,
     Path(codigo_str): Path<String>,
@@ -856,7 +856,7 @@ pub async fn redirigir<S: AlmacenUrls>(
     Ok(Redirect::permanent(&entrada.url_orig))
 }
 
-/// GET /:codigo/stats — Estadísticas de una URL
+/// GET /{codigo}/stats — Estadísticas de una URL
 pub async fn estadisticas<S: AlmacenUrls>(
     State(estado): State<Arc<EstadoApp<S>>>,
     Path(codigo_str): Path<String>,
@@ -942,8 +942,8 @@ async fn main() {
         .route("/health",        get(chequeo_salud::<AlmacenMemoria>))
         .route("/shorten",       post(acortar_url::<AlmacenMemoria>))
         .route("/urls",          get(listar_urls::<AlmacenMemoria>))
-        .route("/:codigo",       get(redirigir::<AlmacenMemoria>))
-        .route("/:codigo/stats", get(estadisticas::<AlmacenMemoria>))
+        .route("/{codigo}",       get(redirigir::<AlmacenMemoria>))
+        .route("/{codigo}/stats", get(estadisticas::<AlmacenMemoria>))
         .layer(middleware::from_fn(telemetria))
         .layer(CorsLayer::permissive())
         .with_state(estado);
@@ -993,14 +993,13 @@ extractor que verifica un header de API key:
 
 ```rust
 use axum::{
-    async_trait,
     extract::FromRequestParts,
     http::{request::Parts, StatusCode},
 };
 
 pub struct ClaveApi(pub String);
 
-#[async_trait]
+// Axum 0.8 usa `async fn` nativo en traits: ya no se necesita `#[async_trait]`.
 impl<S: Send + Sync> FromRequestParts<S> for ClaveApi {
     type Rejection = StatusCode;
 
@@ -1032,7 +1031,7 @@ use axum::Router;
 fn rutas_admin<S: AlmacenUrls>() -> Router<std::sync::Arc<EstadoApp<S>>> {
     Router::new()
         .route("/urls",   get(listar_urls::<S>))
-        // .route("/urls/:id", delete(borrar_url::<S>))
+        // .route("/urls/{id}", delete(borrar_url::<S>))
 }
 
 fn construir_app<S: AlmacenUrls>(
@@ -1041,8 +1040,8 @@ fn construir_app<S: AlmacenUrls>(
     Router::new()
         .route("/health",        get(chequeo_salud::<S>))
         .route("/shorten",       post(acortar_url::<S>))
-        .route("/:codigo",       get(redirigir::<S>))
-        .route("/:codigo/stats", get(estadisticas::<S>))
+        .route("/{codigo}",       get(redirigir::<S>))
+        .route("/{codigo}/stats", get(estadisticas::<S>))
         .nest("/admin", rutas_admin())          // ← sub-router /admin/urls
         .with_state(estado)
 }
@@ -1105,7 +1104,7 @@ async fn servidor_con_apagado() {
 - [ ] Sé que los extractores que consumen el body deben ir como último argumento.
 - [ ] Implementé `IntoResponse` en `ErrorApp` para que `?` funcione en handlers.
 - [ ] El proyecto Url Shortener v1 arranca, acepta peticiones en `/shorten`,
-  redirige en `/:codigo` y devuelve estadísticas en `/:codigo/stats`.
+  redirige en `/{codigo}` y devuelve estadísticas en `/{codigo}/stats`.
 - [ ] El middleware de telemetría registra método, ruta, estado y latencia.
 - [ ] `RUST_LOG=debug cargo run` muestra logs estructurados.
 

@@ -669,7 +669,7 @@ logparser_v2/
 [package]
 name    = "logparser-v2"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 nom        = "7"

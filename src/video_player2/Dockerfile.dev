@@ -4,6 +4,20 @@ WORKDIR /usr/src/video_player
 
 RUN apt-get update && apt-get install -y libssl-dev pkg-config
 
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+    wget \
+    g++ \
+    build-essential \
+    libssl-dev \
+    pkg-config \
+    libavutil-dev \
+    libavformat-dev \
+    libavfilter-dev \ 
+    llvm \ 
+    libclang-dev \
+    ffmpeg
+
 RUN cargo install cargo-watch
 
 CMD ["cargo", "run", "--bin", "video_player"]
