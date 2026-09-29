@@ -15,8 +15,10 @@ En esta sección aprenderemos:
 - Qué son los **lifetimes** (`'a`), cuándo el compilador los infiere solo y cuándo hay
   que anotarlos a mano.
 
-> 💡 **Filosofía de la Semana 5:** *Las abstracciones en Rust tienen coste cero en
-> runtime. El coste se paga en compile-time y en complejidad mental — y vale la pena.*
+!!! quote "Filosofía de la Semana 5"
+
+    *Las abstracciones en Rust tienen coste cero en
+    runtime. El coste se paga en compile-time y en complejidad mental — y vale la pena.*
 
 ---
 
@@ -384,7 +386,9 @@ salida.
 
 ### La regla fundamental
 
-> Una referencia **nunca puede vivir más** que el dato al que apunta.
+!!! note "Idea clave"
+
+    Una referencia **nunca puede vivir más** que el dato al que apunta.
 
 El compilador garantiza esto en tiempo de compilación, eliminando completamente los
 *dangling pointers*.
@@ -559,9 +563,11 @@ std::thread::spawn(|| {
 });
 ```
 
-> ⚠️ No confundas `'static` con "inmutable". Una `String` puede ser `'static` si vive
-> toda la ejecución. El `'static` bound en generics (`T: 'static`) no significa que
-> `T` sea inmutable; significa que `T` no contiene referencias de duración limitada.
+!!! warning "Cuidado"
+
+    No confundas `'static` con "inmutable". Una `String` puede ser `'static` si vive
+    toda la ejecución. El `'static` bound en generics (`T: 'static`) no significa que
+    `T` sea inmutable; significa que `T` no contiene referencias de duración limitada.
 
 ---
 
@@ -804,5 +810,7 @@ cargo clippy          # 0 warnings
 - [ ] El ejercicio `cache_ttl` compila, todos los tests pasan, `clippy` da 0 warnings.
 - [ ] Completo Rustlings: `generics/`, `traits/`, `lifetimes/`.
 
-> **Siguiente paso:** Semana 6 — [Traits avanzados: `dyn Trait`, `Deref`, `Drop`,
-> sobrecarga de operadores y conversiones](section_02.md).
+!!! abstract "Siguiente paso"
+
+    Semana 6 — [Traits avanzados: `dyn Trait`, `Deref`, `Drop`,
+    sobrecarga de operadores y conversiones](section_02.md).

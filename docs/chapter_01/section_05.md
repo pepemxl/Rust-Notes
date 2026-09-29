@@ -14,9 +14,11 @@ En esta sección aprenderemos:
 - `Result<T, E>` como alternativa a las excepciones.
 - Un mini-proyecto para atar todos los conceptos.
 
-> 💡 **Filosofía de la Semana 3:** *Haz que los estados inválidos sean irrepresentables.*
-> Si el compilador puede verificar que tu modelo es correcto, no necesitas escribir
-> docenas de validaciones en tiempo de ejecución.
+!!! quote "Filosofía de la Semana 3"
+
+    *Haz que los estados inválidos sean irrepresentables.*
+    Si el compilador puede verificar que tu modelo es correcto, no necesitas escribir
+    docenas de validaciones en tiempo de ejecución.
 
 ---
 
@@ -452,8 +454,10 @@ fn main() {
 | `filter(pred)` | `None` si `pred` es `false` | `?.filter(pred)` |
 | `is_some()` / `is_none()` | Comprueba variante | `!== null` / `=== null` |
 
-> ⚠️ **Regla de oro:** Nunca uses `unwrap()` en código de producción o lógica de negocio.
-> Usa `match`, `if let`, o los combinadores (`map`, `unwrap_or`, `?`).
+!!! warning "Regla de oro"
+
+    Nunca uses `unwrap()` en código de producción o lógica de negocio.
+    Usa `match`, `if let`, o los combinadores (`map`, `unwrap_or`, `?`).
 
 ### Indexar colecciones devuelve `Option`
 
@@ -812,5 +816,7 @@ Ejecuta con `cargo run`. Comprueba que:
 - [ ] Completo los ejercicios Rustlings: `structs/`, `enums/`, `option/`, `result/`, `match/`.
 - [ ] El mini-proyecto `todo_v1` compila con `cargo clippy` limpio y funciona desde la terminal.
 
-> **Siguiente paso:** Semana 4 — [Módulos, Colecciones, String vs &str, Error Handling
-> Avanzado y Traits básicos](section_06.md).
+!!! abstract "Siguiente paso"
+
+    Semana 4 — [Módulos, Colecciones, String vs &str, Error Handling
+    Avanzado y Traits básicos](section_06.md).

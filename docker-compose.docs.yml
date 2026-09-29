@@ -12,6 +12,7 @@ services:
       - ./docs:/docs/docs
       - ./mkdocs.yml:/docs/mkdocs.yml
       - ./src:/docs/src            # código incluido con pymdownx.snippets
+      - ./.git:/docs/.git:ro       # historial para la fecha de "última actualización"
     command: mkdocs serve --dev-addr=0.0.0.0:8000
 
   # One-shot service to render the static site into ./site
@@ -24,6 +25,7 @@ services:
       - ./docs:/docs/docs
       - ./mkdocs.yml:/docs/mkdocs.yml
       - ./src:/docs/src            # código incluido con pymdownx.snippets
+      - ./.git:/docs/.git:ro       # historial para la fecha de "última actualización"
       - ./site:/docs/site
     command: mkdocs build --strict --site-dir /docs/site
     profiles:

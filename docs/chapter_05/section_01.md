@@ -17,10 +17,12 @@ En esta sección aprenderemos:
 - **Proyecto**: URL Shortener v3 — refactorización completa con Typestate URLs,
   actor contador sharded y DI por traits.
 
-> *"Hacer imposibles los estados inválidos" no es solo un eslogan de marketing —
-> es la única forma de eliminar una categoría entera de bugs sin un solo test.
-> En Rust, el compilador puede ser tu QA más exigente si diseñas bien los tipos.*
-> — Yaron Minsky (adaptado al mundo Rust)
+!!! quote ""
+
+    *"Hacer imposibles los estados inválidos" no es solo un eslogan de marketing —
+    es la única forma de eliminar una categoría entera de bugs sin un solo test.
+    En Rust, el compilador puede ser tu QA más exigente si diseñas bien los tipos.*
+    — Yaron Minsky (adaptado al mundo Rust)
 
 ---
 
@@ -1423,4 +1425,6 @@ error[E0382]: use of moved value: `draft`
   en el estado de Axum para facilitar tests con mocks.
 - [ ] `cargo test` pasa los 7 tests (5 de typestate + 2 de actor).
 
-> **Siguiente sección:** [Semana 18 — Concurrencia avanzada y lock-free](section_02.md)
+!!! abstract "Siguiente sección"
+
+    [Semana 18 — Concurrencia avanzada y lock-free](section_02.md)

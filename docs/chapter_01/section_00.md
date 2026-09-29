@@ -1,11 +1,13 @@
-# 🦀 MES 1: FUNDAMENTOS Y EL "BORROW CHECKER" — Guía Detallada de Estudio
+# Mes 1: fundamentos y el *borrow checker* — guía de estudio
 
-> **Filosofía del Mes:** *"El compilador es tu pair programmer más estricto. Si compila, probablemente funciona."*
-> **Meta:** Dejar de luchar contra `borrow checker` y empezar a *pensar* en ownership. Más adelante veremos que significa esto de `ownership`.
+!!! quote "Filosofía del Mes"
+
+    *"El compilador es tu pair programmer más estricto. Si compila, probablemente funciona."*
+    **Meta:** Dejar de luchar contra `borrow checker` y empezar a *pensar* en ownership. Más adelante veremos que significa esto de `ownership`.
 
 ---
 
-## 📅 SEMANA 1: SETUP, CARGO Y SINTAXIS BÁSICA
+## 📅 Semana 1: setup, Cargo y sintaxis básica
 **Objetivo:** Entorno productivo funcionando + sintaxis base (variables, funciones, control de flujo).
 
 ### 🎯 Conceptos Clave (The "What")
@@ -50,9 +52,11 @@ cd rustlings
 rustlings        # Modo interactivo (watch): edita -> guarda -> test auto
 ```
 
-> **⚠️ Cambio importante en la nueva versión:** ahora basta con ejecutar `rustlings`
-> (sin subcomando) para entrar al **modo interactivo/watch** directamente. Como `watch`
-> es el flujo principal de trabajo, lo convirtieron en el comportamiento por defecto.
+!!! warning "Cambio importante en la nueva versión"
+
+    Ahora basta con ejecutar `rustlings`
+    (sin subcomando) para entrar al **modo interactivo/watch** directamente. Como `watch`
+    es el flujo principal de trabajo, lo convirtieron en el comportamiento por defecto.
 
 **Equivalencias entre versiones:**
 
@@ -69,7 +73,9 @@ rustlings        # Modo interactivo (watch): edita -> guarda -> test auto
 3. `if/` (expresiones if, else if, let else - *preview*)
 4. `primitive_types/` (tuples, arrays, slices intro, string literals vs String)
 
-> **💡 Truco:** Si te atascas > 10 min: `rustlings hint <ejercicio>`. Lee el error del compilador *antes* de la pista.
+!!! tip "Truco"
+
+    Si te atascas > 10 min: `rustlings hint <ejercicio>`. Lee el error del compilador *antes* de la pista.
 
 ### 🧪 Mini-Reto: "Hola Cargo Avanzado"
 
@@ -83,7 +89,7 @@ Crea un proyecto `cargo new hello_cargo`.
 
 ---
 
-## 📅 SEMANA 2: OWNERSHIP, BORROWING Y SLICES (EL NÚCLEO DURO)
+## 📅 Semana 2: ownership, borrowing y slices (el núcleo duro)
 **Objetivo:** Internalizar las 3 reglas. Entender Stack vs Heap. Dejar de poner `clone()` por pánico.
 
 ### 🧠 Las 3 Reglas de Oro (Memorízalas)
@@ -116,7 +122,9 @@ HEAP (Puntero + Len + Cap, Tamaño dinámico, Más lento acceso)
 | **Clone (Explícito)** | `let s2 = s1.clone();` | **Deep copy**: Heap nuevo asignado, datos copiados. `s1` y `s2` válidos. | Cuando **necesario** compartir ownership real. Costoso (O(N)). |
 | **Copy (Implícito)** | `let y = x;` | **Bitwise copy** en Stack. `x` sigue válido. **Zero cost**. | Tipos **con** `Copy` trait (`i32`, `f64`, `bool`, `char`, tuplas/arrays de `Copy`, `&T`). |
 
-> **Regla de Oro:** ¿Implementa `Copy`? (Primitivos, referencias `&T`). **Sí** -> Copy automático. **No** -> Move automático. ¿Quieres duplicar Heap? `.clone()`.
+!!! tip "Regla de Oro"
+
+    ¿Implementa `Copy`? (Primitivos, referencias `&T`). **Sí** -> Copy automático. **No** -> Move automático. ¿Quieres duplicar Heap? `.clone()`.
 
 ### 🤝 Referencias & Borrowing (Préstamo)
 *   `&T` (Referencia Inmutable / **Shared Reference**): **Muchos** lectores simultáneos. **Nadie** escribe. `&T` **es `Copy`**.
@@ -130,8 +138,10 @@ HEAP (Puntero + Len + Cap, Tamaño dinámico, Más lento acceso)
 *   **Permiten funciones genéricas sobre secuencias** sin tomar ownership ni requerir `Vec` específico.
 
 ### 🎥 Recurso Visual Obligatorio
-> **Jon Gjengset - "Crust of Rust: Ownership and Borrowing" (YouTube, ~1.5h)**
-> *Verlo a 1.25x, pausar y codificar los ejemplos. Es la mejor explicación visual del borrow checker.*
+!!! note "Recurso recomendado"
+
+    **Jon Gjengset - "Crust of Rust: Ownership and Borrowing" (YouTube, ~1.5h)**
+    *Verlo a 1.25x, pausar y codificar los ejemplos. Es la mejor explicación visual del borrow checker.*
 
 ### 📝 Ejercicios Rustlings (Semana 2)
 *   `move_semantics/` (Move, Clone, Copy, funciones tomando ownership)
@@ -166,7 +176,7 @@ fn test_split() {
 
 ---
 
-## 📅 SEMANA 3: STRUCTS, ENUMS, PATTERN MATCHING Y MANEJO DE ERRORES BÁSICO
+## 📅 Semana 3: structs, enums, pattern matching y manejo de errores básico
 **Objetivo:** Modelar dominio del problema con tipos algebraicos (ADTs). Hacer imposibles los estados inválidos.
 
 ### 🏗️ Structs (Datos Estructurados)
@@ -259,7 +269,7 @@ while let Some(item) = iterator.next() { ... }
 
 ---
 
-## 📅 SEMANA 4: MÓDULOS, COLECCIONES, STRING VS &STR, ERROR HANDLING AVANZADO, TRAITS BÁSICOS
+## 📅 Semana 4: módulos, colecciones, `String` vs `&str`, errores y traits básicos
 **Objetivo:** Organizar código escalable. Dominar `String`/`&str`. Propagar errores como un pro. Derivar traits estándar.
 
 ### 📦 Sistema de Módulos (Rust 2018 Edition - `mod.rs` legacy vs `foo.rs`/`foo/`)
@@ -388,7 +398,7 @@ todo_cli/
 
 ---
 
-## 📚 RESUMEN DE RECURSOS SEMANA A SEMANA (Para no perderse)
+## 📚 Recursos semana a semana
 
 | Semana | Lectura "The Book" (Oficial) | Video Profundo (Jon Gjengset) | Práctica Activa |
 | :--- | :--- | :--- | :--- |
@@ -399,7 +409,7 @@ todo_cli/
 
 ---
 
-## ⚠️ PROBLEMAS COMUNES MES 1 (Y CÓMO EVITARLAS)
+## ⚠️ Problemas comunes del Mes 1 (y cómo evitarlos)
 
 | Trampa | Síntoma | Solución |
 | :--- | :--- | :--- |
@@ -412,9 +422,11 @@ todo_cli/
 
 ---
 
-## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+## 🧩 Material complementario: laboratorio de código comentado
 
-> Todos los ejemplos de esta sección **compilan con Rust 1.85+ (edición 2024)** salvo los marcados con `// ❌ NO COMPILA`, que son errores *intencionales* para que leas el mensaje del compilador. Cópialos en un `cargo new` y juega con ellos.
+!!! info "Sobre los ejemplos"
+
+    Todos los ejemplos de esta sección **compilan con Rust 1.85+ (edición 2024)** salvo los marcados con `// ❌ NO COMPILA`, que son errores *intencionales* para que leas el mensaje del compilador. Cópialos en un `cargo new` y juega con ellos.
 
 ### 1️⃣ Ownership & Move (la regla del único dueño)
 
@@ -598,13 +610,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-> **Conexión con el resto del capítulo:** la sintaxis básica (impresión, números, comentarios) está en
-> [Instalación y primeros pasos](section_01.md) y [Aritmética en Rust](section_02.md). Aquí cubrimos el
-> **núcleo conceptual** (ownership, borrowing, ADTs, errores) que distingue a Rust de C/C++.
+!!! note "Conexión con el resto del capítulo"
+
+    La sintaxis básica (impresión, números, comentarios) está en
+    [Instalación y primeros pasos](section_01.md) y [Aritmética en Rust](section_02.md). Aquí cubrimos el
+    **núcleo conceptual** (ownership, borrowing, ADTs, errores) que distingue a Rust de C/C++.
 
 ---
 
-## ✅ CHECKLIST FINAL MES 1 (¿Estás listo para Mes 2?)
+## ✅ Checklist final del Mes 1 (¿listo para el Mes 2?)
 
 - [ ] **Entorno:** `rustup`, `cargo-watch`, `clippy`, `rust-analyzer` funcionando. `cargo fmt` en save.
 - [ ] **Rustlings:** **100% completado** (hasta `threads` y `macros` básicos si tienes tiempo).
@@ -618,7 +632,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
-### 🚀 PRÓXIMO PASO: MES 2
-> **Generics, Traits avanzados, Lifetimes en structs, Smart Pointers (`Box`, `Rc`, `RefCell`), Testing profesional, Publicar Crate.**
+### 🚀 Próximo paso: Mes 2
+!!! abstract "Lo que viene"
+
+    **Generics, Traits avanzados, Lifetimes en structs, Smart Pointers (`Box`, `Rc`, `RefCell`), Testing profesional, Publicar Crate.**
 
 *¿Listo? La curva se aplana. Lo prometido es deuda: a partir de Mes 2, Rust se siente como un superpoder.* 🦀

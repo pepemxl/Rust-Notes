@@ -1,10 +1,12 @@
-# 🦀 MES 4: SISTEMAS, CLI AVANZADO Y WASM — Guía Detallada
-> **Filosofía del Mes:** *"Rust brilla donde otros lenguajes tiemblan: en la frontera con el hardware (FFI), en la terminal (CLI UX), en el navegador (Wasm) y procesando datos masivos (Parsing). Aquí es donde 'Zero-Cost Abstractions' se vuelve tangible."*
-> **Meta:** Entregar 4 artefactos profesionales: **CLI instalable**, **Wrapper FFI seguro**, **App Wasm interactiva**, **Parser streaming de alto rendimiento**.
+# Mes 4: sistemas, CLI avanzado y WebAssembly — guía de estudio
+!!! quote "Filosofía del Mes"
+
+    *"Rust brilla donde otros lenguajes tiemblan: en la frontera con el hardware (FFI), en la terminal (CLI UX), en el navegador (Wasm) y procesando datos masivos (Parsing). Aquí es donde 'Zero-Cost Abstractions' se vuelve tangible."*
+    **Meta:** Entregar 4 artefactos profesionales: **CLI instalable**, **Wrapper FFI seguro**, **App Wasm interactiva**, **Parser streaming de alto rendimiento**.
 
 ---
 
-## 📅 SEMANA 13: CLI PROFESIONAL — UX DE PRIMERA CLASE
+## 📅 Semana 13: CLI profesional — UX de primera clase
 **Objetivo:** Dejar de escribir `std::env::args().nth(1)...`. Dominar `clap` Derive API, completions, color, progreso y TUI básica.
 
 ### 🎯 Conceptos Clave
@@ -157,7 +159,7 @@ fn test_hash_single_file() {
 
 ---
 
-## 📅 SEMANA 14: FFI & `unsafe` — PUENTE SEGURO A C
+## 📅 Semana 14: FFI y `unsafe` — puente seguro a C
 **Objetivo:** Llamar C desde Rust y exponer Rust a C **sin UB (Undefined Behavior)**. Encapsular `unsafe` en APIs 100% Safe.
 
 ### 🎯 Conceptos Clave
@@ -266,7 +268,7 @@ impl Drop for CryptoBox {
 
 ---
 
-## 📅 SEMANA 15: WEBASSEMBLY (WASM) — RUST EN EL NAVEGADOR
+## 📅 Semana 15: WebAssembly (Wasm) — Rust en el navegador
 **Objetivo:** Compilar Rust a Wasm, interactuar con JS/DOM, paralelismo con `rayon`/`wasm-bindgen-rayon`, integrar en frontend real.
 
 ### 🎯 Conceptos Clave
@@ -368,7 +370,7 @@ pub fn App() -> impl IntoView {
 
 ---
 
-## 📅 SEMANA 16: PARSING & TEXT PROCESSING — NOM, PEST, REGEX
+## 📅 Semana 16: parsing y procesamiento de texto — nom, pest, regex
 **Objetivo:** Parsers robustos, mantenibles y rápidos. Elegir la herramienta correcta: *Combinators (Nom)* vs *PEG (Pest)* vs *Regex*.
 
 ### 🎯 Conceptos Clave
@@ -459,7 +461,7 @@ fn bench_nginx_parsing(c: &mut Criterion) {
 
 ---
 
-## 📚 RESUMEN RECURSOS MES 4
+## 📚 Recursos del Mes 4
 
 | Semana | Lectura Oficial / Docs | Video / Blog Profundo | Práctica Clave |
 | :--- | :--- | :--- | :--- |
@@ -470,7 +472,7 @@ fn bench_nginx_parsing(c: &mut Criterion) {
 
 ---
 
-## ⚠️ PROBLEMAS COMUNES MES 4 (Y SOLUCIONES)
+## ⚠️ Problemas comunes del Mes 4 (y soluciones)
 
 | Área | Trampa | Síntoma | Solución |
 | :--- | :--- | :--- | :--- |
@@ -485,9 +487,11 @@ fn bench_nginx_parsing(c: &mut Criterion) {
 
 ---
 
-## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+## 🧩 Material complementario: laboratorio de código comentado
 
-> Las secciones **1–5 compilan y corren con Rust 1.85+ (edición 2024) usando SOLO `std`** — sin `clap`, `nom`, `bindgen` ni `wasm-bindgen`. Cubren el núcleo verificable del mes: **FFI/`unsafe` seguro** y **parsing zero-copy a mano**. Las secciones 6–7 (clap / wasm-bindgen) requieren crates externas y se muestran como referencia idiomática.
+!!! info "Sobre los ejemplos"
+
+    Las secciones **1–5 compilan y corren con Rust 1.85+ (edición 2024) usando SOLO `std`** — sin `clap`, `nom`, `bindgen` ni `wasm-bindgen`. Cubren el núcleo verificable del mes: **FFI/`unsafe` seguro** y **parsing zero-copy a mano**. Las secciones 6–7 (clap / wasm-bindgen) requieren crates externas y se muestran como referencia idiomática.
 
 ### 1️⃣ Exportar a C: `extern "C"`, `#[unsafe(no_mangle)]`, `#[repr(C)]`
 
@@ -499,7 +503,9 @@ struct Punto { x: f64, y: f64 }
 pub extern "C" fn suma(a: i32, b: i32) -> i32 { a + b }
 ```
 
-> `#[repr(C)]` es **obligatorio** en cualquier struct que cruce la frontera FFI: sin él, Rust puede reordenar campos y el layout no coincidiría con el de C → UB.
+!!! note "Idea clave"
+
+    `#[repr(C)]` es **obligatorio** en cualquier struct que cruce la frontera FFI: sin él, Rust puede reordenar campos y el layout no coincidiría con el de C → UB.
 
 ### 2️⃣ Strings entre mundos: `CString` (owned) y `CStr` (prestado)
 
@@ -517,7 +523,9 @@ fn rust_a_c_y_vuelta(s: &str) -> String {
 // rust_a_c_y_vuelta("hola FFI") == "hola FFI"
 ```
 
-> Nunca pases `String::as_ptr()` a C: un `String` **no** termina en `\0`. Usa siempre `CString`. Y al recibir de C, `CStr::from_ptr` es `unsafe` porque confías en que el puntero es válido y NUL-terminado.
+!!! note "Idea clave"
+
+    Nunca pases `String::as_ptr()` a C: un `String` **no** termina en `\0`. Usa siempre `CString`. Y al recibir de C, `CStr::from_ptr` es `unsafe` porque confías en que el puntero es válido y NUL-terminado.
 
 ### 3️⃣ Transferir ownership como en C: `Box::into_raw` / `Box::from_raw`
 
@@ -531,7 +539,9 @@ fn ownership_transfer() -> i32 {
 }
 ```
 
-> `into_raw` **renuncia** a la gestión automática; tú (o C) eres responsable de devolverlo con `from_raw` exactamente una vez. Es el mecanismo canónico para pasar objetos Rust por un puntero opaco a C.
+!!! note "Idea clave"
+
+    `into_raw` **renuncia** a la gestión automática; tú (o C) eres responsable de devolverlo con `from_raw` exactamente una vez. Es el mecanismo canónico para pasar objetos Rust por un puntero opaco a C.
 
 ### 4️⃣ El patrón clave del mes: wrapper **seguro** sobre `unsafe` + `Drop`
 
@@ -567,7 +577,9 @@ impl Drop for Buffer {
 }
 ```
 
-> Esta es la **idea central de la Semana 14**: el `unsafe` queda *encapsulado* y la API expuesta es imposible de usar mal (bounds checked + `Drop` libera el recurso). Cada `into_raw` tiene su `from_raw` ⇒ ni doble-free ni leak.
+!!! note "Idea clave"
+
+    Esta es la **idea central de la Semana 14**: el `unsafe` queda *encapsulado* y la API expuesta es imposible de usar mal (bounds checked + `Drop` libera el recurso). Cada `into_raw` tiene su `from_raw` ⇒ ni doble-free ni leak.
 
 ### 5️⃣ Parser combinator a mano (el modelo de `nom`), **zero-copy**
 
@@ -599,7 +611,9 @@ fn main() {
 }
 ```
 
-> Los resultados (`&str`) son **vistas dentro del input original** (zero-copy), exactamente la propiedad que hace a `nom` rápido. `nom` añade combinadores (`alt`, `tuple`, `many0`, `map_res`) sobre este mismo patrón `I -> IResult<I, O>`.
+!!! note "Idea clave"
+
+    Los resultados (`&str`) son **vistas dentro del input original** (zero-copy), exactamente la propiedad que hace a `nom` rápido. `nom` añade combinadores (`alt`, `tuple`, `many0`, `map_res`) sobre este mismo patrón `I -> IResult<I, O>`.
 
 ### 6️⃣ `clap` Derive: parseo de argumentos declarativo *(requiere `clap`)*
 
@@ -641,11 +655,13 @@ pub fn saludar(nombre: &str) -> String {
 //      await init(); saludar("mundo");
 ```
 
-> `#[wasm_bindgen]` genera el *glue* JS/TS automáticamente. El mismo principio del § 5 (devolver slices/datos sin copiar) aplica para mover `Uint8Array`/`ImageData` entre Rust y el Canvas con el mínimo de copias.
+!!! note "Idea clave"
+
+    `#[wasm_bindgen]` genera el *glue* JS/TS automáticamente. El mismo principio del § 5 (devolver slices/datos sin copiar) aplica para mover `Uint8Array`/`ImageData` entre Rust y el Canvas con el mínimo de copias.
 
 ---
 
-## ✅ CHECKLIST FINAL MES 4 (Definition of Done)
+## ✅ Checklist final del Mes 4 (definition of done)
 
 ### 1. CLI Profesional (`mytool`)
 - [ ] `cargo install --path .` instala binario + **completions** (bash/zsh/fish) + **man page** (`man mytool`).
@@ -677,8 +693,10 @@ pub fn saludar(nombre: &str) -> String {
 
 ---
 
-### 🚀 PRÓXIMO PASO: MES 5
-> **ARQUITECTURA, PATRONES Y RENDIMIENTO (Senior Level)**
-> *Design Patterns en Rust (Typestate, Actor, Builder), Concurrencia Lock-Free (Atomics, Crossbeam), Profiling (`perf`, `flamegraph`, `criterion`), Optimización real (SIMD, Allocators, Cache-friendly).*
+### 🚀 Próximo paso: Mes 5
+!!! abstract "Lo que viene"
+
+    **ARQUITECTURA, PATRONES Y RENDIMIENTO (Senior Level)**
+    *Design Patterns en Rust (Typestate, Actor, Builder), Concurrencia Lock-Free (Atomics, Crossbeam), Profiling (`perf`, `flamegraph`, `criterion`), Optimización real (SIMD, Allocators, Cache-friendly).*
 
 *Ya tocas el metal, la terminal, el navegador y los logs. Ahora diseñas sistemas que escalan.* 🦀⚙️📊

@@ -12,9 +12,11 @@ haber visto cómo [instalar Rust e imprimir a pantalla](section_01.md) y la
 - Cómo escribir **funciones**, y la distinción clave entre **sentencias** y **expresiones**.
 - El **control de flujo**: `if`/`else`, `loop`, `while` y `for`.
 
-> 💡 **Filosofía de la Semana 1:** *El compilador es tu pair programmer más estricto.*
-> Si algo no compila, lee el mensaje de error completo: casi siempre te dice exactamente
-> qué arreglar.
+!!! quote "Filosofía de la Semana 1"
+
+    *El compilador es tu pair programmer más estricto.*
+    Si algo no compila, lee el mensaje de error completo: casi siempre te dice exactamente
+    qué arreglar.
 
 ---
 
@@ -78,9 +80,11 @@ println!("Hola {nombre}");      // forma moderna (1.58+)
 println!("Hola {}", nombre);    // forma clásica
 ```
 
-> ⚠️ Solo funciona con **nombres de variables simples**. Para expresiones (`a + b`,
-> `obj.campo`) hay que seguir usando `{}` con el argumento por separado:
-> `println!("{}", a + b);`.
+!!! warning "Cuidado"
+
+    Solo funciona con **nombres de variables simples**. Para expresiones (`a + b`,
+    `obj.campo`) hay que seguir usando `{}` con el argumento por separado:
+    `println!("{}", a + b);`.
 
 ---
 
@@ -147,8 +151,10 @@ fn main() {
 - Por convención se escriben en `SCREAMING_SNAKE_CASE`.
 - Pueden declararse en cualquier ámbito, incluso fuera de `main` (ámbito global).
 
-> 💡 El guion bajo `_` en `100_000` es solo un separador visual de miles; el compilador lo
-> ignora. `1_000_000` se lee mucho mejor que `1000000`.
+!!! tip "Consejo"
+
+    El guion bajo `_` en `100_000` es solo un separador visual de miles; el compilador lo
+    ignora. `1_000_000` se lee mucho mejor que `1000000`.
 
 ---
 
@@ -265,9 +271,11 @@ fn main() {
 }
 ```
 
-> ⚠️ Si intentas acceder a un índice fuera de rango (`a[10]`), Rust hace **panic** en
-> tiempo de ejecución en lugar de leer memoria inválida como haría C. Esta verificación de
-> límites es parte de las garantías de seguridad del lenguaje.
+!!! warning "Cuidado"
+
+    Si intentas acceder a un índice fuera de rango (`a[10]`), Rust hace **panic** en
+    tiempo de ejecución en lugar de leer memoria inválida como haría C. Esta verificación de
+    límites es parte de las garantías de seguridad del lenguaje.
 
 Cuando necesites una lista de **tamaño dinámico**, usarás `Vec<T>` (lo veremos más adelante);
 para la Semana 1 nos basta con arreglos.
@@ -379,8 +387,10 @@ fn main() {
 }
 ```
 
-> ⚠️ Ambas ramas del `if` deben devolver el **mismo tipo**. `if condicion { 5 } else { "seis" }`
-> no compila.
+!!! warning "Cuidado"
+
+    Ambas ramas del `if` deben devolver el **mismo tipo**. `if condicion { 5 } else { "seis" }`
+    no compila.
 
 ### `loop`
 
@@ -455,27 +465,40 @@ fn main() {
 Crea un proyecto con `cargo new fizzbuzz` y resuelve el clásico **FizzBuzz** usando lo
 aprendido en esta sección (variables, `for`, rangos, `if`/`else if`/`else`):
 
-```rust
-fn main() {
-    for n in 1..=20 {              // 1..=20 incluye el 20 (rango inclusivo)
-        if n % 15 == 0 {
-            println!("FizzBuzz");
-        } else if n % 3 == 0 {
-            println!("Fizz");
-        } else if n % 5 == 0 {
-            println!("Buzz");
-        } else {
-            println!("{n}");
+Imprime los números del 1 al 20, pero en lugar de los múltiplos de 3 escribe `Fizz`, en
+lugar de los múltiplos de 5 escribe `Buzz`, y en los múltiplos de ambos, `FizzBuzz`.
+
+??? success "Solución"
+
+    ```rust
+    fn main() {
+        for n in 1..=20 {              // 1..=20 incluye el 20 (rango inclusivo)
+            if n % 15 == 0 {
+                println!("FizzBuzz");
+            } else if n % 3 == 0 {
+                println!("Fizz");
+            } else if n % 5 == 0 {
+                println!("Buzz");
+            } else {
+                println!("{n}");
+            }
         }
     }
-}
-```
+    ```
 
-Ejecútalo con `cargo run` y verifica la salida. Luego, como extensión:
+Luego, como extensión:
 
 1. Convierte la lógica en una función `fn fizzbuzz(n: u32) -> String` que **devuelva** el
    texto (practica sentencias vs expresiones y el tipo de retorno).
 2. Cambia el rango a `1..=100`.
+
+??? success "Solución con las extensiones"
+
+    Código completo en [`fizzbuzz`](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/fizzbuzz/src/main.rs). Fíjate en que cada rama del `if` es una expresión sin `;`.
+
+    ```rust
+    --8<-- "src/chapter_01/fizzbuzz/src/main.rs"
+    ```
 
 ---
 
@@ -489,6 +512,9 @@ Ejecútalo con `cargo run` y verifica la salida. Luego, como extensión:
 - [ ] Escribo funciones con parámetros y retorno; entiendo **sentencias vs expresiones**.
 - [ ] Uso `if`/`else`, `loop`, `while` y `for` con soltura; sé que `if`/`loop` son expresiones.
 
-> **Siguiente paso:** completa los ejercicios de
-> [Rustlings](section_00.md) (`variables`, `functions`, `if`, `primitive_types`) y prepárate
-> para la Semana 2, donde llega el corazón de Rust: **ownership y borrowing**.
+!!! abstract "Siguiente paso"
+
+    Completa los ejercicios de
+    [Rustlings](section_00.md) (`variables`, `functions`, `if`, `primitive_types`) y prepárate
+    para la Semana 2, donde llega el corazón de Rust:
+    [**ownership y borrowing**](section_04.md).

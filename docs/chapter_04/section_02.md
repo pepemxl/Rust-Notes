@@ -22,11 +22,13 @@ En esta sección aprenderemos:
 - `Send`/`Sync` manuales para tipos FFI.
 - `cargo miri` para detectar UB.
 
-> 💡 **Filosofía de la Semana 14:** *`unsafe` no significa "código peligroso sin
-> revisar" — significa "código cuya corrección no puede verificar el compilador". Es
-> tu responsabilidad documentar y hacer cumplir los invariantes que el compilador ya no
-> puede. Escribe el menor bloque `unsafe` posible y envuélvelo en una API que haga
-> imposible violarlo.*
+!!! quote "Filosofía de la Semana 14"
+
+    *`unsafe` no significa "código peligroso sin
+    revisar" — significa "código cuya corrección no puede verificar el compilador". Es
+    tu responsabilidad documentar y hacer cumplir los invariantes que el compilador ya no
+    puede. Escribe el menor bloque `unsafe` posible y envuélvelo en una API que haga
+    imposible violarlo.*
 
 ---
 
@@ -1098,4 +1100,6 @@ FLUJO COMPLETO DE UN WRAPPER SEGURO
 - [ ] Opcional: `cargo +nightly miri test` pasa (para la parte Rust; no puede ejecutar
   el C real).
 
-> **Siguiente paso:** Semana 15 — [WebAssembly: Rust en el navegador](section_03.md).
+!!! abstract "Siguiente paso"
+
+    Semana 15 — [WebAssembly: Rust en el navegador](section_03.md).

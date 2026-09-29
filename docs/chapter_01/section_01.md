@@ -9,9 +9,11 @@ Esta es la primera sección práctica de la **Semana 1**. Aquí aprenderemos:
 - Cómo usar los *placeholders* de formato: posicionales, con nombre, `{:?}`, ancho y precisión.
 - Cómo escribir comentarios, incluidos los comentarios de documentación.
 
-> 💡 **Filosofía de la Semana 1:** *El compilador es tu pair programmer más estricto.*
-> Desde el primer "Hola mundo" acostúmbrate a leer los mensajes de error completos:
-> casi siempre dicen exactamente qué arreglar.
+!!! quote "Filosofía de la Semana 1"
+
+    *El compilador es tu pair programmer más estricto.*
+    Desde el primer "Hola mundo" acostúmbrate a leer los mensajes de error completos:
+    casi siempre dicen exactamente qué arreglar.
 
 ---
 
@@ -164,8 +166,10 @@ No `main` function was found in a binary crate.
 To fix this error, add a `main` function:
 ```
 
-> 💡 **Hábito:** cuando un error no te quede claro, ejecuta `rustc --explain <código>`
-> antes de buscar en internet.
+!!! tip "Hábito"
+
+    Cuando un error no te quede claro, ejecuta `rustc --explain <código>`
+    antes de buscar en internet.
 
 ### Comandos esenciales de Cargo
 
@@ -451,6 +455,14 @@ Pistas:
 
 Cuando funcione, ejecuta `cargo fmt` y `cargo clippy` y revisa si sugieren algo.
 
+??? success "Solución"
+
+    Intenta resolverlo antes de abrir esto. Código completo en [`tarjeta`](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/tarjeta/src/main.rs).
+
+    ```rust
+    --8<-- "src/chapter_01/tarjeta/src/main.rs"
+    ```
+
 ---
 
 ## ✅ Checklist
@@ -464,4 +476,6 @@ Cuando funcione, ejecuta `cargo fmt` y `cargo clippy` y revisa si sugieren algo.
 - [ ] Distingo `{}` (`Display`) de `{:?}` (`Debug`) y sé controlar ancho y precisión.
 - [ ] Sé escribir comentarios normales, anidados y de documentación.
 
-> **Siguiente paso:** [Aritmética en Rust](section_02.md).
+!!! abstract "Siguiente paso"
+
+    [Aritmética en Rust](section_02.md).

@@ -19,9 +19,11 @@ En esta sección aprenderemos:
 - El refactor completo del Url Shortener v2 con PostgreSQL + SQLx + Serde.
 - Tests de integración con `testcontainers`.
 
-> 💡 **Filosofía de la Semana 11:** *La diferencia entre un ORM y SQLx es que SQLx te
-> deja escribir SQL real y te ayuda a no equivocarte en él. Escribes SQL, el compilador
-> lo valida, Rust hace el mapeo. Sin magia, sin rendimiento oculto.*
+!!! quote "Filosofía de la Semana 11"
+
+    *La diferencia entre un ORM y SQLx es que SQLx te
+    deja escribir SQL real y te ayuda a no equivocarte en él. Escribes SQL, el compilador
+    lo valida, Rust hace el mapeo. Sin magia, sin rendimiento oculto.*
 
 ---
 
@@ -1290,4 +1292,6 @@ CICLO DE DESARROLLO
   de `incrementar_clics`.
 - [ ] Opcional: uso `#[sqlx::test]` para tests rápidos sin Docker en macros de BD.
 
-> **Siguiente paso:** Semana 12 — [Observabilidad, Docker y CI/CD: production-ready](section_04.md).
+!!! abstract "Siguiente paso"
+
+    Semana 12 — [Observabilidad, Docker y CI/CD: production-ready](section_04.md).

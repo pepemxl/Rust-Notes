@@ -1,10 +1,12 @@
-# 🦀 MES 3: ASYNC RUST Y ECOSISTEMA WEB — Guía Detallada
-> **Filosofía del Mes:** *"Async en Rust no es magia, es una máquina de estados generada por el compilador. Entender `Future`, `Pin` y `Waker` te permite depurar *deadlocks*, *livelocks* y problemas de rendimiento que son opacos en otros lenguajes."*
-> **Meta:** Construir un servicio web **observable, tipado, seguro y contenedorizado** usando el stack estándar de la industria (Tokio, Axum, SQLx, Tracing).
+# Mes 3: async Rust y ecosistema web — guía de estudio
+!!! quote "Filosofía del Mes"
+
+    *"Async en Rust no es magia, es una máquina de estados generada por el compilador. Entender `Future`, `Pin` y `Waker` te permite depurar *deadlocks*, *livelocks* y problemas de rendimiento que son opacos en otros lenguajes."*
+    **Meta:** Construir un servicio web **observable, tipado, seguro y contenedorizado** usando el stack estándar de la industria (Tokio, Axum, SQLx, Tracing).
 
 ---
 
-## 📅 SEMANA 9: FUNDAMENTOS ASYNC — BAJO EL CAPÓ
+## 📅 Semana 9: fundamentos async — bajo el capó
 **Objetivo:** Desmitificar `async`/`await`. Entender que una future es un *state machine* perezosa que necesita un *executor* para avanzar. Dominar `Pin` y `Send/Sync` en contexto async.
 
 ### 🎯 Conceptos Clave (The "Why" y "How")
@@ -166,7 +168,7 @@ fn main() {
 
 ---
 
-## 📅 SEMANA 10: TOKIO ECOSISTEMA & AXUM (Construyendo el Servidor)
+## 📅 Semana 10: ecosistema Tokio y Axum (construyendo el servidor)
 **Objetivo:** Dominar el runtime Tokio (tasks, channels, sync) y Axum (Extractors, State, Tower Middleware).
 
 ### 🎯 Conceptos Clave
@@ -381,7 +383,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
-## 📅 SEMANA 11: BASES DE DATOS (SQLX) & SERIALIZACIÓN AVANZADA (SERDE)
+## 📅 Semana 11: bases de datos (SQLx) y serialización avanzada (Serde)
 **Objetivo:** SQL **type-safe** en compile-time. Migraciones. Serde power user.
 
 ### 🎯 Conceptos Clave
@@ -516,7 +518,7 @@ async fn test_pg_storage_full_cycle() {
 
 ---
 
-## 📅 SEMANA 12: OBSERVABILIDAD, DOCKER & CI/CD (Production Ready)
+## 📅 Semana 12: observabilidad, Docker y CI/CD (production ready)
 **Objetivo:** Logs estructurados (JSON), Métricas (Prometheus), Health Checks, Imagen Docker < 20MB, Pipeline CI completo.
 
 ### 🎯 Conceptos Clave
@@ -677,7 +679,7 @@ jobs:
 
 ---
 
-## 📚 RESUMEN RECURSOS MES 3
+## 📚 Recursos del Mes 3
 
 | Semana | Lectura Oficial | Video Profundo | Práctica Clave |
 | :--- | :--- | :--- | :--- |
@@ -688,7 +690,7 @@ jobs:
 
 ---
 
-## ⚠️ PROBLEMAS COMUNES MES 3 (Y SOLUCIONES)
+## ⚠️ Problemas comunes del Mes 3 (y soluciones)
 
 | Trampa | Síntoma | Solución |
 | :--- | :--- | :--- |
@@ -702,9 +704,11 @@ jobs:
 
 ---
 
-## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+## 🧩 Material complementario: laboratorio de código comentado
 
-> Los ejemplos de las secciones **1–5 compilan con Rust 1.85+ (edición 2024) usando SOLO `std`** — sin Tokio ni crates externas. Son la versión mínima y verificable de lo que el runtime hace por dentro, perfectos para conectar con el ejercicio *Toykio* de la Semana 9. Las secciones 6–7 (Tokio/Axum) requieren las dependencias del proyecto y se muestran como referencia idiomática.
+!!! info "Sobre los ejemplos"
+
+    Los ejemplos de las secciones **1–5 compilan con Rust 1.85+ (edición 2024) usando SOLO `std`** — sin Tokio ni crates externas. Son la versión mínima y verificable de lo que el runtime hace por dentro, perfectos para conectar con el ejercicio *Toykio* de la Semana 9. Las secciones 6–7 (Tokio/Axum) requieren las dependencias del proyecto y se muestran como referencia idiomática.
 
 ### 1️⃣ Una `Future` hecha a mano
 
@@ -724,7 +728,9 @@ impl Future for Listo {
 }
 ```
 
-> Una `Future` es **perezosa**: no hace nada hasta que alguien la *pollea*. Sin un executor que llame a `poll`, el código `async` jamás avanza.
+!!! note "Idea clave"
+
+    Una `Future` es **perezosa**: no hace nada hasta que alguien la *pollea*. Sin un executor que llame a `poll`, el código `async` jamás avanza.
 
 ### 2️⃣ Una future con estado: `Pending` antes de `Ready`
 
@@ -747,7 +753,9 @@ impl Future for Cuenta {
 }
 ```
 
-> **`Pending` + `Waker` es el corazón de async.** La future no bloquea: devuelve `Pending` y guarda (o usa) el `Waker` para avisar al executor cuando vuelva a tener trabajo.
+!!! note "`Pending` + `Waker` es el corazón de async"
+
+    La future no bloquea: devuelve `Pending` y guarda (o usa) el `Waker` para avisar al executor cuando vuelva a tener trabajo.
 
 ### 3️⃣ `block_on`: un mini-executor de un solo hilo (solo `std`)
 
@@ -780,7 +788,9 @@ fn main() {
 }
 ```
 
-> Esto es exactamente lo que `#[tokio::main]` hace a gran escala: construye un executor, crea wakers reales (que re-encolan tareas en vez de girar en vacío) y pollea las futures hasta completarlas.
+!!! note "Idea clave"
+
+    Esto es exactamente lo que `#[tokio::main]` hace a gran escala: construye un executor, crea wakers reales (que re-encolan tareas en vez de girar en vacío) y pollea las futures hasta completarlas.
 
 ### 4️⃣ `async`/`await`: la *state machine* que genera el compilador
 
@@ -798,7 +808,9 @@ async fn flujo(id: u64) -> (u64, u32) {
 // assert_eq!(block_on(flujo(5)), (50, 1));
 ```
 
-> Cada `.await` es un **punto de suspensión**: el compilador convierte `flujo` en un `enum` de estados (`Start → EsperandoUsuario → EsperandoPosts → Done`). Por eso una future puede ser *self-referential* y necesita `Pin`.
+!!! note "Idea clave"
+
+    Cada `.await` es un **punto de suspensión**: el compilador convierte `flujo` en un `enum` de estados (`Start → EsperandoUsuario → EsperandoPosts → Done`). Por eso una future puede ser *self-referential* y necesita `Pin`.
 
 ### 5️⃣ `Send` verificado en compile-time
 
@@ -816,7 +828,9 @@ fn main() {
 }
 ```
 
-> Regla de oro async: lo que cruce un `.await` dentro de una tarea `spawn` debe ser `Send`. Por eso usas `Arc<tokio::sync::Mutex<T>>` y **nunca** mantienes un `MutexGuard` (o un `Rc`) vivo a través de un `.await`.
+!!! note "Idea clave"
+
+    Regla de oro async: lo que cruce un `.await` dentro de una tarea `spawn` debe ser `Send`. Por eso usas `Arc<tokio::sync::Mutex<T>>` y **nunca** mantienes un `MutexGuard` (o un `Rc`) vivo a través de un `.await`.
 
 ### 6️⃣ Handler de Axum con `AppError` → `IntoResponse` *(requiere las deps del proyecto)*
 
@@ -858,11 +872,13 @@ impl IntoResponse for AppError {
 // }
 ```
 
-> `join!` espera a **todas** las futures; `select!` corre hasta que **una** termina y cancela el resto. Es el patrón canónico para *timeouts*, *races* y apagado limpio (`select!` entre el server y una señal `ctrl_c`).
+!!! note "Idea clave"
+
+    `join!` espera a **todas** las futures; `select!` corre hasta que **una** termina y cancela el resto. Es el patrón canónico para *timeouts*, *races* y apagado limpio (`select!` entre el server y una señal `ctrl_c`).
 
 ---
 
-## ✅ CHECKLIST FINAL MES 3 (Definition of Done - "Production Ready")
+## ✅ Checklist final del Mes 3 (definition of done: production ready)
 
 ### Código & Arquitectura
 - [ ] **Async Correcto:** Sin `.block_on()` en código async. `spawn_blocking` para CPU/Blocking I/O. `join!` para paralelismo en handlers.
@@ -894,8 +910,10 @@ impl IntoResponse for AppError {
 
 ---
 
-### 🚀 PRÓXIMO PASO: MES 4
-> **SISTEMAS, CLI AVANZADO Y WASM (Rust "Close to Metal")**
-> *FFI (`unsafe` seguro), CLI UX Pro (`clap`, `ratatui`), WebAssembly (`wasm-bindgen`, `leptos`/`yew`), Parsing (`nom`/`pest`).*
+### 🚀 Próximo paso: Mes 4
+!!! abstract "Lo que viene"
+
+    **SISTEMAS, CLI AVANZADO Y WASM (Rust "Close to Metal")**
+    *FFI (`unsafe` seguro), CLI UX Pro (`clap`, `ratatui`), WebAssembly (`wasm-bindgen`, `leptos`/`yew`), Parsing (`nom`/`pest`).*
 
 *Ya tienes un backend profesional. Ahora tocas el metal y el navegador.* 🦀🌐📦

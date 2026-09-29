@@ -16,9 +16,11 @@ En esta sección aprenderemos:
 - **Sobrecarga de operadores** con `std::ops`.
 - El ejercicio integrador `ByteBuffer`.
 
-> 💡 **Filosofía de la Semana 6:** *Implementar los traits correctos no es azúcar
-> sintáctica — es lo que hace que tu tipo encaje en el ecosistema. Un tipo con `From`,
-> `Deref` y `Display` bien implementados se usa igual que los tipos de la std.*
+!!! quote "Filosofía de la Semana 6"
+
+    *Implementar los traits correctos no es azúcar
+    sintáctica — es lo que hace que tu tipo encaje en el ecosistema. Un tipo con `From`,
+    `Deref` y `Display` bien implementados se usa igual que los tipos de la std.*
 
 ---
 
@@ -952,5 +954,7 @@ cargo clippy
 - [ ] El ejercicio `ByteBuffer` compila, todos los tests pasan y `clippy` da 0 warnings.
 - [ ] Completo la lectura del Cap. 20.2 de The Book (Advanced Traits; era el Cap. 19 en ediciones anteriores).
 
-> **Siguiente paso:** Semana 7 — [Smart Pointers e Interior Mutability: `Box`, `Rc`,
-> `Arc`, `RefCell`, `Mutex`](section_03.md).
+!!! abstract "Siguiente paso"
+
+    Semana 7 — [Smart Pointers e Interior Mutability: `Box`, `Rc`,
+    `Arc`, `RefCell`, `Mutex`](section_03.md).

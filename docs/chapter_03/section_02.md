@@ -15,10 +15,12 @@ En esta sección aprenderemos:
 - Manejo de errores con `AppError` e `IntoResponse`.
 - El proyecto completo **Url Shortener v1**.
 
-> 💡 **Filosofía de la Semana 10:** *En Rust async no hay magia. Axum es simplemente
-> tipos que implementan traits de Tower; sus extractores son simplemente structs que
-> implementan `FromRequest`. Cuando entiendas esa mecánica, podrás extender el
-> framework sin buscar si "tiene soporte para X".*
+!!! quote "Filosofía de la Semana 10"
+
+    *En Rust async no hay magia. Axum es simplemente
+    tipos que implementan traits de Tower; sus extractores son simplemente structs que
+    implementan `FromRequest`. Cuando entiendas esa mecánica, podrás extender el
+    framework sin buscar si "tiene soporte para X".*
 
 ---
 
@@ -205,9 +207,11 @@ async fn main() {
 
 ### La regla fundamental
 
-> **Nunca uses `std::sync::Mutex::lock()` si vas a hacer `.await` mientras tienes el
-> guard activo.** Bloquea un worker thread del runtime, lo que puede producir un
-> deadlock si todos los workers quedan bloqueados esperando.
+!!! note "Idea clave"
+
+    **Nunca uses `std::sync::Mutex::lock()` si vas a hacer `.await` mientras tienes el
+    guard activo.** Bloquea un worker thread del runtime, lo que puede producir un
+    deadlock si todos los workers quedan bloqueados esperando.
 
 ```rust
 // ❌ PELIGROSO: std Mutex a través de .await
@@ -1108,4 +1112,6 @@ async fn servidor_con_apagado() {
 - [ ] El middleware de telemetría registra método, ruta, estado y latencia.
 - [ ] `RUST_LOG=debug cargo run` muestra logs estructurados.
 
-> **Siguiente paso:** Semana 11 — [Bases de datos con SQLx y Serde avanzado](section_03.md).
+!!! abstract "Siguiente paso"
+
+    Semana 11 — [Bases de datos con SQLx y Serde avanzado](section_03.md).

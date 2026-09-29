@@ -18,12 +18,14 @@ no cobertura.
   Separación de concerns, `workspace.dependencies`, `workspace.lints`,
   `cargo hack` y `xtask` para automatización del build.
 
-> *"A master in the art of living draws no sharp distinction between his work
-> and his play, his labor and his leisure, his mind and his body, his education
-> and his recreation. He hardly knows which is which. He simply pursues his
-> vision of excellence through whatever he is doing and leaves others to
-> determine whether he is working or playing."*
-> — François-René de Chateaubriand
+!!! quote ""
+
+    *"A master in the art of living draws no sharp distinction between his work
+    and his play, his labor and his leisure, his mind and his body, his education
+    and his recreation. He hardly knows which is which. He simply pursues his
+    vision of excellence through whatever he is doing and leaves others to
+    determine whether he is working or playing."*
+    — François-René de Chateaubriand
 
 ---
 
@@ -1400,4 +1402,6 @@ mod arquitectura_tests {
 - [ ] `cargo xtask lint` automatiza: `clippy`, `fmt --check`, `hack check`.
 - [ ] `cargo build --release --workspace` genera los binarios finales.
 
-> **Siguiente sección:** [Mes 6 — Proyecto Capstone](../chapter_06/section_00.md)
+!!! abstract "Siguiente sección"
+
+    [Mes 6 — Proyecto Capstone](../chapter_06/section_00.md)

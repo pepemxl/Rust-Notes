@@ -15,9 +15,11 @@ En esta sección aprenderemos:
 - Los patrones canónicos `Rc<RefCell<T>>` y `Arc<Mutex<T>>`.
 - Ejercicio: grafo con punteros padre/hijo bidireccionales.
 
-> 💡 **Filosofía de la Semana 7:** *Los smart pointers no son magia — son tipos normales
-> que implementan `Deref`, `Drop` y, en algunos casos, `Deref` + `Drop` + conteo de
-> referencias. Cuando los entiendes como tipos, los usas con precisión.*
+!!! quote "Filosofía de la Semana 7"
+
+    *Los smart pointers no son magia — son tipos normales
+    que implementan `Deref`, `Drop` y, en algunos casos, `Deref` + `Drop` + conteo de
+    referencias. Cuando los entiendes como tipos, los usas con precisión.*
 
 ---
 
@@ -902,4 +904,6 @@ cargo clippy
 - [ ] Aplico el patrón `Rc<RefCell<T>>` y `Arc<Mutex<T>>` en el contexto correcto.
 - [ ] Veo el video de Jon Gjengset sobre Interior Mutability.
 
-> **Siguiente paso:** Semana 8 — [Testing, documentación y tooling profesional](section_04.md).
+!!! abstract "Siguiente paso"
+
+    Semana 8 — [Testing, documentación y tooling profesional](section_04.md).

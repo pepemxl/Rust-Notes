@@ -16,10 +16,12 @@ En esta sección aprenderemos:
 - Configuración avanzada de **Clippy** y **rustfmt**.
 - El proyecto integrador del Mes 2.
 
-> 💡 **Filosofía de la Semana 8:** *Un test que no falla cuando el código es incorrecto
-> no sirve de nada. Un test que falla cuando el código es correcto molesta. El objetivo
-> es la especificidad: cada test verifica exactamente una cosa, con el mínimo de
-> infraestructura posible.*
+!!! quote "Filosofía de la Semana 8"
+
+    *Un test que no falla cuando el código es incorrecto
+    no sirve de nada. Un test que falla cuando el código es correcto molesta. El objetivo
+    es la especificidad: cada test verifica exactamente una cosa, con el mínimo de
+    infraestructura posible.*
 
 ---
 
@@ -1098,5 +1100,7 @@ jobs:
 - [ ] **Semana 7:** `Box`, `Rc`/`Arc`, `RefCell`/`Cell`/`Mutex`/`RwLock`, `Weak`. Ejercicio árbol con `Rc<RefCell<Nodo>>`.
 - [ ] **Semana 8:** Pirámide de testing, doc tests, benchmarks `criterion`, Clippy avanzado, rustfmt. Proyecto `estadisticas`.
 
-> **¡Mes 2 completado!** El siguiente paso es el **Mes 3**:
-> [Async Rust, Futures, Tokio, Axum y SQLx](../chapter_03/section_00.md).
+!!! success "¡Mes 2 completado!"
+
+    El siguiente paso es el **Mes 3**:
+    [Async Rust, Futures, Tokio, Axum y SQLx](../chapter_03/section_00.md).

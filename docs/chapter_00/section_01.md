@@ -9,9 +9,11 @@ Rust** y cuándo vale la pena pagar su curva de aprendizaje. En esta sección ve
 - Cuándo **sí** y cuándo **no** elegir Rust.
 - Cómo está organizado este curso.
 
-> 💡 **Idea central:** *Rust traslada una gran familia de bugs (memoria, concurrencia)
-> del tiempo de ejecución al tiempo de compilación. Pagas con un compilador más estricto;
-> cobras con programas que fallan mucho menos en producción.*
+!!! quote "Idea central"
+
+    *Rust traslada una gran familia de bugs (memoria, concurrencia)
+    del tiempo de ejecución al tiempo de compilación. Pagas con un compilador más estricto;
+    cobras con programas que fallan mucho menos en producción.*
 
 ---
 
@@ -163,4 +165,6 @@ por semana que termina en un **mini-reto** y una **checklist**.
 - [ ] Tengo claro que la curva inicial es empinada y que el compilador es un aliado,
   no un enemigo.
 
-> **Siguiente paso:** [Instalación y primeros pasos](../chapter_01/section_01.md).
+!!! abstract "Siguiente paso"
+
+    [Instalación y primeros pasos](../chapter_01/section_01.md).

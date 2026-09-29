@@ -1,10 +1,12 @@
-# 🦀 MES 6: PROYECTO FINAL CAPSTONE & ESPECIALIZACIÓN — "THE RUSTACEAN PORTFOLIO"
-> **Filosofía del Mes:** *"Aquí no se aprende Rust, se demuestra que sabes ingeniería de software con Rust. El código es el currículum; la arquitectura, la tesis; la observabilidad, la garantía."*
-> **Objetivo:** Entregar un **sistema distribuido completo, observable, seguro y documentado** que sirva como pieza central de tu portfolio técnico. Simular un entorno de producción real (CI/CD, Staging, Infra as Code, Postmortems).
+# Mes 6: proyecto final (capstone) y especialización — guía de estudio
+!!! quote "Filosofía del Mes"
+
+    *"Aquí no se aprende Rust, se demuestra que sabes ingeniería de software con Rust. El código es el currículum; la arquitectura, la tesis; la observabilidad, la garantía."*
+    **Objetivo:** Entregar un **sistema distribuido completo, observable, seguro y documentado** que sirva como pieza central de tu portfolio técnico. Simular un entorno de producción real (CI/CD, Staging, Infra as Code, Postmortems).
 
 ---
 
-## 🗓️ CRONOGRAMA MACRO (4 Semanas)
+## 🗓️ Cronograma general (4 semanas)
 
 | Semana | Fase | Entregable Clave | Tiempo Estimado |
 | :--- | :--- | :--- | :--- |
@@ -14,9 +16,11 @@
 
 ---
 
-## 📋 FASE 1: DISEÑO Y CONTRATO (Semana 21) — "Mide dos veces, corta una"
+## 📋 Fase 1: diseño y contrato (Semana 21) — "mide dos veces, corta una"
 
-> **Regla de Oro:** **No se escribe una sola línea de código de implementación** hasta que `DESIGN.md` no tenga aprobado (auto-aprobado o por mentor/pares).
+!!! tip "Regla de Oro"
+
+    **No se escribe una sola línea de código de implementación** hasta que `DESIGN.md` no tenga aprobado (auto-aprobado o por mentor/pares).
 
 ### 1. `DESIGN.md` — Estructura Obligatoria
 ```markdown
@@ -94,7 +98,7 @@ erDiagram
 
 ---
 
-## ⚙️ FASE 2: IMPLEMENTACIÓN CORE (Semanas 22-23) — "Make it Work, Make it Right, Make it Fast"
+## ⚙️ Fase 2: implementación core (Semanas 22-23) — "make it work, make it right, make it fast"
 
 ### Estructura del Workspace (`Cargo.toml` Raíz)
 ```toml
@@ -193,11 +197,13 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 
 ---
 
-## 🎯 FASE 3: ESPECIALIZACIÓN "MASTERY PATH" (Semana 24) — "Elige tu Arma"
+## 🎯 Fase 3: especialización, tu *mastery path* (Semana 24)
 
-> **Elige UNA ruta y ve profundo. No intentes todo.** Documenta *por qué* elegiste esa ruta para este proyecto.
+!!! note "Elige UNA ruta y ve profundo. No intentes todo"
 
-### 🛤️ RUTA A: BACKEND / CLOUD NATIVE (Distributed Systems)
+    Documenta *por qué* elegiste esa ruta para este proyecto.
+
+### 🛤️ Ruta A: backend / cloud native (sistemas distribuidos)
 *   **gRPC + Tonic:** Define `proto` en `crates/proto`. Implementa `UserService` gRPC junto a REST. `tonic-build` en `build.rs`.
 *   **Kubernetes Operator (kube-rs):** CRD `Project` / `ApiKey`. Controller en Rust (`kube::runtime::Controller`) que reconcilia estado (crea DB, configura Redis, DNS).
 *   **Service Mesh / mTLS:** `linkerd2-proxy` sidecar o `cilium`. Configura `rustls` para mTLS interno automático.
@@ -221,7 +227,7 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
     ```
 *   **Entregable:** Dashboard Grafana (Golden Signals: Latency, Traffic, Errors, Saturation) + Alertas PrometheusRule.
 
-### 🛤️ RUTA B: SYSTEMS / CLI EXTREMO (Developer Experience)
+### 🛤️ Ruta B: sistemas / CLI (developer experience)
 *   **Plugin System (`libloading`):**
     *   Define `trait Plugin { fn name(&self) -> &str; fn register(&self, registry: &mut PluginRegistry); }`.
     *   `PluginRegistry` guarda `Box<dyn Plugin>`.
@@ -231,7 +237,7 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 *   **Completion Generators:** `clap_complete` + generación dinámica de specs para plugins cargados.
 *   **Entregable:** `cargo install mytool` -> `mytool plugin install github.com/user/cool-plugin` -> `mytool cool-plugin --help` funciona.
 
-### 🛤️ RUTA C: WASM / FULLSTACK (Leptos / Dioxus / Yew + SSR)
+### 🛤️ Ruta C: Wasm / fullstack (Leptos / Dioxus / Yew + SSR)
 *   **SSR + Hydration (Leptos/Dioxus):**
     *   `crate-server` sirve HTML inicial renderizado en Rust (`leptos::ssr::render_to_string`).
     *   `wasm-bindgen` + `wasm-pack` genera `.wasm` + JS glue.
@@ -244,14 +250,14 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 *   **Frontend State:** `leptos::signal` / `dioxus::signal` + `server functions` (RPC type-safe).
 *   **Entregable:** Lighthouse Score > 95 (Performance, Best Practices, SEO). TTFB < 200ms.
 
-### 🛤️ RUTA D: DATA / ML (Polars + DataFusion + Candle)
+### 🛤️ Ruta D: datos / ML (Polars + DataFusion + Candle)
 *   **Analytics Engine:** `datafusion` para SQL sobre Parquet/CSV/Arrow en `crates/core`.
 *   **ETL Pipeline:** `crates/cli` command `ingest` usa `polars` (Lazy API) para procesar TB de logs -> Parquet particionado (Apache Iceberg/Delta Lake via `delta-rs`).
 *   **ML Inference:** `candle` (ONNX/Rust native) para embedding/clasificación en `server` (batch async via `tokio::task::spawn_blocking`).
 *   **Vector Search:** `pgvector` (Postgres) o `qdrant` client para RAG.
 *   **Entregable:** Benchmark `polars` vs `pandas`/`spark` en README. API `/embed` + `/search` funcional.
 
-### 🛤️ RUTA E: EMBEDDED (Embassy + Defmt)
+### 🛤️ Ruta E: embedded (Embassy + defmt)
 *   **Target:** RP2040 / ESP32-C3 / STM32H7 (QEMU si no hay HW).
 *   **Architecture:** `embassy` tasks: `sensor`, `comm` (LoRa/WiFi/Ethernet), `display`, `storage` (LittleFS/Embassy-FS).
 *   **Observabilidad:** `defmt` (logging zero-cost) + `probe-rs run` + `defmt-print` en host.
@@ -260,7 +266,7 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 
 ---
 
-## 📚 DOCUMENTACIÓN FINAL — "El estándar de una Crate Top 1%"
+## 📚 Documentación final — el estándar de una crate de primer nivel
 
 | Archivo | Contenido Mínimo Viable |
 | :--- | :--- |
@@ -274,8 +280,9 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 
 ---
 
-## 🎬 LA ENTREGA FINAL: CHARLA TÉCNICA DE 10 MINUTOS
-> **Simula una "System Design Interview" o "Tech Talk" interna.**
+## 🎬 La entrega final: charla técnica de 10 minutos
+!!! note "Simula una "System Design Interview" o "Tech Talk" interna"
+
 
 ### Guion Sugerido (Diapositivas / Terminal en vivo)
 1.  **Intro (30s):** Nombre, Problema, Stack, Rol.
@@ -293,9 +300,11 @@ overflow-checks = true # = true # Opcional: detecta overflow en prod (costoso)
 
 ---
 
-## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+## 🧩 Material complementario: laboratorio de código comentado
 
-> Las secciones **1–4 compilan y corren con Rust 1.85+ (edición 2024) usando SOLO `std`** (incluyendo el actor de shutdown con `std::thread` + `mpsc`). Modelan, en pequeño, las decisiones de ingeniería del capstone: **arquitectura hexagonal**, **modelo de errores HTTP**, **readiness** y **apagado limpio**. Las secciones 5–6 (Axum / utoipa / tonic) requieren las crates del proyecto y van como referencia idiomática.
+!!! info "Sobre los ejemplos"
+
+    Las secciones **1–4 compilan y corren con Rust 1.85+ (edición 2024) usando SOLO `std`** (incluyendo el actor de shutdown con `std::thread` + `mpsc`). Modelan, en pequeño, las decisiones de ingeniería del capstone: **arquitectura hexagonal**, **modelo de errores HTTP**, **readiness** y **apagado limpio**. Las secciones 5–6 (Axum / utoipa / tonic) requieren las crates del proyecto y van como referencia idiomática.
 
 ### 1️⃣ Ports & Adapters: el corazón de la separación `core` / `db` / `server`
 
@@ -340,7 +349,9 @@ impl EventStore for InMemoryStore {
 }
 ```
 
-> La lógica de negocio (`ingest`) **no depende de la base de datos**: depende del trait `EventStore`. Por eso `crates/core` se testea sin Postgres (adapter en memoria) y `crates/db` solo implementa el port. Es exactamente la regla "core no depende de db" del Mes 5/6.
+!!! note "Idea clave"
+
+    La lógica de negocio (`ingest`) **no depende de la base de datos**: depende del trait `EventStore`. Por eso `crates/core` se testea sin Postgres (adapter en memoria) y `crates/db` solo implementa el port. Es exactamente la regla "core no depende de db" del Mes 5/6.
 
 ### 2️⃣ Error de dominio → HTTP + RFC 9457 (Problem Details)
 
@@ -372,7 +383,9 @@ impl ProblemDetails {
 // DomainError::Conflict(7).to_problem().status == 409
 ```
 
-> Un único mapeo `error de dominio → (status, cuerpo)` mantiene la API consistente. En el `server` esto se conecta a `impl IntoResponse for DomainError` (sección 5) para que los handlers usen `?` y devuelvan errores HTTP correctos automáticamente.
+!!! note "Idea clave"
+
+    Un único mapeo `error de dominio → (status, cuerpo)` mantiene la API consistente. En el `server` esto se conecta a `impl IntoResponse for DomainError` (sección 5) para que los handlers usen `?` y devuelvan errores HTTP correctos automáticamente.
 
 ### 3️⃣ Readiness: agregación de health checks (`/ready`)
 
@@ -395,7 +408,9 @@ fn readiness(checks: &[&dyn HealthCheck]) -> (u16, Vec<(String, bool)>) {
 }
 ```
 
-> Diferencia clave del checklist: `/health` (liveness) responde 200 si el proceso vive; `/ready` (readiness) agrega dependencias reales (DB pool, Redis, mailbox del actor) y devuelve **503** si alguna no está lista, para que el balanceador no le mande tráfico.
+!!! note "Idea clave"
+
+    Diferencia clave del checklist: `/health` (liveness) responde 200 si el proceso vive; `/ready` (readiness) agrega dependencias reales (DB pool, Redis, mailbox del actor) y devuelve **503** si alguna no está lista, para que el balanceador no le mande tráfico.
 
 ### 4️⃣ Graceful shutdown: drenar la cola antes de salir
 
@@ -430,7 +445,9 @@ fn procesar_con_drain(jobs: Vec<Job>) -> Vec<u32> {
 // ↑ el Work(3) posterior al Shutdown TAMBIÉN se procesa: nada se pierde al apagar.
 ```
 
-> Esto modela el `with_graceful_shutdown` del `server`: al recibir `SIGTERM`, dejas de aceptar trabajo nuevo pero **drenas** lo pendiente (peticiones en vuelo, buffers del `PersistenceWriter`) antes de terminar. La versión Tokio usa `tokio::select!` + `signal::ctrl_c()` + drenado de canales.
+!!! note "Idea clave"
+
+    Esto modela el `with_graceful_shutdown` del `server`: al recibir `SIGTERM`, dejas de aceptar trabajo nuevo pero **drenas** lo pendiente (peticiones en vuelo, buffers del `PersistenceWriter`) antes de terminar. La versión Tokio usa `tokio::select!` + `signal::ctrl_c()` + drenado de canales.
 
 ### 5️⃣ `IntoResponse` para `DomainError` *(requiere Axum)*
 
@@ -468,11 +485,13 @@ struct ApiDoc; // ApiDoc::openapi() -> spec servible en /docs (Swagger UI)
 async fn create_event() { /* ... */ }
 ```
 
-> *Contract-first* o *code-first*: con `utoipa` el `openapi.yaml` se genera desde los tipos y handlers, así el contrato **nunca** se desincroniza de la implementación.
+!!! note "Idea clave"
+
+    *Contract-first* o *code-first*: con `utoipa` el `openapi.yaml` se genera desde los tipos y handlers, así el contrato **nunca** se desincroniza de la implementación.
 
 ---
 
-## ✅ CHECKLIST DEFINITIVO — "SHIP IT" (Definition of Done Global)
+## ✅ Checklist definitivo — "ship it" (definition of done global)
 
 ### Código & Arquitectura
 - [ ] **Workspace:** `cargo test --workspace --all-features` **Pasa (0 warnings, 0 errors)**.
@@ -514,7 +533,7 @@ async fn create_event() { /* ... */ }
 
 ---
 
-## 🏁 CIERRE DEL CURSO: ¿Y AHORA QUÉ?
+## 🏁 Cierre del curso: ¿y ahora qué?
 
 Has completado **6 meses de inmersión total en Rust**. Ya no eres "alguien que aprende Rust". Eres un **Ingeniero de Sistemas Rust**.
 
@@ -536,15 +555,16 @@ Has completado **6 meses de inmersión total en Rust**. Ya no eres "alguien que 
 
 ---
 
-### FELICIDADES YA TERMINARON
+### 🎉 ¡Felicidades, terminaste el curso!
 
-> **Habilidades Demostradas:**
-> - ✅ Systems Programming & Memory Safety (Ownership, Borrowing, Lifetimes)
-> - ✅ Async & Concurrency Mastery (Tokio, Actors, Atomics, Lock-Free)
-> - ✅ Backend Engineering (Axum, SQLx, Postgres, Redis, Auth, Observability)
-> - ✅ CLI & Developer Experience (Clap, TUI, Completions, Plugins, FFI)
-> - ✅ WebAssembly & Frontend Integration (wasm-bindgen, Leptos/Yew, Optimization)
-> - ✅ High-Performance Computing (Profiling, SIMD, Cache-Friendly, Allocators)
-> - ✅ Software Architecture (Typestate, DI, Actor Model, Monorepo, ADRs)
-> - ✅ Production Readiness (Docker, CI/CD, Kubernetes, Security, Supply Chain)
-> - ✅ Specialization Depth (Cloud / Systems / Wasm / Data / Embedded)
+!!! success "Habilidades Demostradas"
+
+    - ✅ Systems Programming & Memory Safety (Ownership, Borrowing, Lifetimes)
+    - ✅ Async & Concurrency Mastery (Tokio, Actors, Atomics, Lock-Free)
+    - ✅ Backend Engineering (Axum, SQLx, Postgres, Redis, Auth, Observability)
+    - ✅ CLI & Developer Experience (Clap, TUI, Completions, Plugins, FFI)
+    - ✅ WebAssembly & Frontend Integration (wasm-bindgen, Leptos/Yew, Optimization)
+    - ✅ High-Performance Computing (Profiling, SIMD, Cache-Friendly, Allocators)
+    - ✅ Software Architecture (Typestate, DI, Actor Model, Monorepo, ADRs)
+    - ✅ Production Readiness (Docker, CI/CD, Kubernetes, Security, Supply Chain)
+    - ✅ Specialization Depth (Cloud / Systems / Wasm / Data / Embedded)

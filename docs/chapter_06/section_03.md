@@ -22,9 +22,11 @@ En esta sección aprenderemos:
 - Cómo escribir tests de integración que levantan el servidor real en un
   puerto libre y tests E2E con contenedores reales.
 
-> *"A system is never the sum of its parts; it's the product of their
-> interactions."*
-> — Russell Ackoff
+!!! quote ""
+
+    *"A system is never the sum of its parts; it's the product of their
+    interactions."*
+    — Russell Ackoff
 
 ---
 
@@ -1658,4 +1660,6 @@ metrics::histogram!("redirect_duration_ms").record(elapsed_ms);
   las requests en vuelo y sale con código 0 en ≤ 30 segundos. Loguea
   `"Servidor apagado limpiamente"`.
 
-> **Siguiente sección:** [Semana 24 — Especialización y pulido final](section_04.md)
+!!! abstract "Siguiente sección"
+
+    [Semana 24 — Especialización y pulido final](section_04.md)

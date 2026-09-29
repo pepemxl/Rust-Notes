@@ -22,8 +22,10 @@ En esta sección aprenderemos:
 - Cómo construir una imagen Docker multi-stage con `cargo-chef` que respeta
   el caché de capas incluso cuando el código cambia.
 
-> *"Make it work, make it right, make it fast — in that order."*
-> — Kent Beck
+!!! quote ""
+
+    *"Make it work, make it right, make it fast — in that order."*
+    — Kent Beck
 
 ---
 
@@ -1545,4 +1547,6 @@ unknown-git      = "warn"
 - [ ] El CLI `lm migrate` ejecuta las migraciones contra la DB de dev sin error.
 - [ ] El CLI `lm check` reporta `postgres: ✓ OK` con Docker Compose corriendo.
 
-> **Siguiente sección:** [Semana 23 — Servidor HTTP, autenticación y tests E2E](section_03.md)
+!!! abstract "Siguiente sección"
+
+    [Semana 23 — Servidor HTTP, autenticación y tests E2E](section_03.md)

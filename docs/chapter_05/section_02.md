@@ -22,10 +22,12 @@ En esta sección aprenderemos:
 - **Proyecto**: benchmark científico — cuatro implementaciones de un contador
   distribuido comparadas con `criterion` variando threads de 1 a 64.
 
-> *"Concurrent programming is hard not because threads are hard; it's hard because
-> you're reasoning about multiple temporal orderings of events at once. Atomic types
-> give you the minimum vocabulary to do that reasoning precisely."*
-> — Mara Bos, *Rust Atomics and Locks*
+!!! quote ""
+
+    *"Concurrent programming is hard not because threads are hard; it's hard because
+    you're reasoning about multiple temporal orderings of events at once. Atomic types
+    give you the minimum vocabulary to do that reasoning precisely."*
+    — Mara Bos, *Rust Atomics and Locks*
 
 ---
 
@@ -346,10 +348,12 @@ impl<T> Drop for StackLockFree<T> {
 }
 ```
 
-> ⚠️ Este stack tiene el **ABA problem**: si un hilo lee la cabeza, se suspende,
-> y mientras tanto otro hilo hace pop y push del mismo nodo, el CAS tiene éxito
-> aunque el estado haya cambiado. En producción usa `crossbeam::epoch` o
-> `crossbeam::queue::SegQueue`.
+!!! warning "Cuidado"
+
+    Este stack tiene el **ABA problem**: si un hilo lee la cabeza, se suspende,
+    y mientras tanto otro hilo hace pop y push del mismo nodo, el CAS tiene éxito
+    aunque el estado haya cambiado. En producción usa `crossbeam::epoch` o
+    `crossbeam::queue::SegQueue`.
 
 ---
 
@@ -1351,4 +1355,6 @@ a.compare_exchange(old, new, Ordering::AcqRel, Ordering::Acquire)?;
 - [ ] `cargo test --test correctness` pasa los 5 tests (4 de corrección + 1
   de tamaño de shard).
 
-> **Siguiente sección:** [Semana 19 — Profiling y optimización](section_03.md)
+!!! abstract "Siguiente sección"
+
+    [Semana 19 — Profiling y optimización](section_03.md)

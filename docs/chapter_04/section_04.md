@@ -20,10 +20,12 @@ En esta sección aprenderemos:
 - El proyecto completo: **`logparser`** — CLI streaming multi-formato.
 - Benchmarks con `criterion` comparando nom vs regex.
 
-> 💡 **Filosofía de la Semana 16:** *Un parser no es solo "leer texto" — es establecer
-> un contrato entre el formato externo y los tipos internos. `nom` hace ese contrato
-> composable y verificable en compilación. Un buen parser falla de forma descriptiva
-> en el byte 47 en vez de devolver datos corruptos en silencio.*
+!!! quote "Filosofía de la Semana 16"
+
+    *Un parser no es solo "leer texto" — es establecer
+    un contrato entre el formato externo y los tipos internos. `nom` hace ese contrato
+    composable y verificable en compilación. Un buen parser falla de forma descriptiva
+    en el byte 47 en vez de devolver datos corruptos en silencio.*
 
 ---
 
@@ -1283,7 +1285,9 @@ done | logparser
 - [ ] `cargo test --test parser_test` pasa los 7 tests.
 - [ ] `cargo bench` produce un informe HTML en `target/criterion/`.
 
-> **Fin del Mes 4.** Has construido una CLI profesional, un wrapper FFI seguro, una
-> app Wasm interactiva y un parser de logs de alto rendimiento.
->
-> **Siguiente paso:** Mes 5 — [Arquitectura, patrones y rendimiento](../chapter_05/section_00.md).
+!!! success "Fin del Mes 4"
+
+    Has construido una CLI profesional, un wrapper FFI seguro, una
+    app Wasm interactiva y un parser de logs de alto rendimiento.
+
+    **Siguiente paso:** Mes 5 — [Arquitectura, patrones y rendimiento](../chapter_05/section_00.md).

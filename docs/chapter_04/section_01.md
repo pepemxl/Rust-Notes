@@ -16,9 +16,11 @@ En esta sección aprenderemos:
 - Tests de CLI con `assert_cmd` y `predicates`.
 - El proyecto completo `mytool`: hashing con progreso, generador de contraseñas.
 
-> 💡 **Filosofía de la Semana 13:** *Una CLI bien hecha es una API pública. Su "UX" son
-> los argumentos, los mensajes de error, el `--help` y las completions. `clap` hace que
-> esa API sea declarativa y difícil de romper.*
+!!! quote "Filosofía de la Semana 13"
+
+    *Una CLI bien hecha es una API pública. Su "UX" son
+    los argumentos, los mensajes de error, el `--help` y las completions. `clap` hace que
+    esa API sea declarativa y difícil de romper.*
 
 ---
 
@@ -1179,4 +1181,6 @@ mytool hash --help
   stderr, código de salida, y formato JSON válido.
 - [ ] `cargo test --test cli_test` pasa sin errores.
 
-> **Siguiente paso:** Semana 14 — [FFI y unsafe: puente seguro a C](section_02.md).
+!!! abstract "Siguiente paso"
+
+    Semana 14 — [FFI y unsafe: puente seguro a C](section_02.md).

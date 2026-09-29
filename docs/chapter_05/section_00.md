@@ -1,10 +1,12 @@
-# 🦀 MES 5: ARQUITECTURA, PATRONES Y RENDIMIENTO — Guía Detallada (Senior Level)
-> **Filosofía del Mes:** *"Rust te obliga a modelar el estado y la concurrencia en el sistema de tipos. Aquí es donde dejas de 'hacer que compile' y empiezas a 'diseñar para que escale, sea mantenible y rápido'. Zero-cost abstractions no son gratis: requieren disciplina arquitectónica."*
-> **Meta:** Dominar patrones idiomáticos avanzados, concurrencia *lock-free* real, profiling científico y optimización guiada por datos. Entregar un artefacto que demuestre maestría: **Sistema Actor refactorizado**, **Benchmark de concurrencia riguroso**, **Optimización documentada** y **Proyecto Final de especialización**.
+# Mes 5: arquitectura, patrones y rendimiento — guía de estudio
+!!! quote "Filosofía del Mes"
+
+    *"Rust te obliga a modelar el estado y la concurrencia en el sistema de tipos. Aquí es donde dejas de 'hacer que compile' y empiezas a 'diseñar para que escale, sea mantenible y rápido'. Zero-cost abstractions no son gratis: requieren disciplina arquitectónica."*
+    **Meta:** Dominar patrones idiomáticos avanzados, concurrencia *lock-free* real, profiling científico y optimización guiada por datos. Entregar un artefacto que demuestre maestría: **Sistema Actor refactorizado**, **Benchmark de concurrencia riguroso**, **Optimización documentada** y **Proyecto Final de especialización**.
 
 ---
 
-## 📅 SEMANA 17: PATRONES DE DISEÑO EN RUST — MODELADO DE ESTADO Y ARQUITECTURA
+## 📅 Semana 17: patrones de diseño en Rust — modelado de estado y arquitectura
 **Objetivo:** Internalizar patrones que aprovechan el sistema de tipos (Typestate, Newtype, Actor) para hacer imposibles los estados inválidos y gestionar concurrencia sin locks manuales.
 
 ### 🎯 Conceptos Clave
@@ -164,7 +166,7 @@ fn start_counter() -> CounterHandle {
 
 ---
 
-## 📅 SEMANA 18: CONCURRENCIA AVANZADA & LOCK-FREE — LA VERDAD BAJO EL CAPÓ
+## 📅 Semana 18: concurrencia avanzada y lock-free — la verdad bajo el capó
 **Objetivo:** Entender *Memory Ordering* (`Acquire`/`Release`/`Relaxed`/`SeqCst`), *False Sharing*, *Epoch-based Reclamation* (`crossbeam`). Escribir estructuras de datos concurrentes correctas y rápidas.
 
 ### 🎯 Conceptos Clave (Basado en **"Rust Atomics and Locks" de Mara Bos** — **Lectura Obligatoria**)
@@ -244,7 +246,7 @@ fn bench_counters(c: &mut Criterion) {
 
 ---
 
-## 📅 SEMANA 19: PROFILING & OPTIMIZACIÓN — CIENCIA SOBRE INTUICIÓN
+## 📅 Semana 19: profiling y optimización — ciencia sobre intuición
 **Objetivo:** Metodología: **Medir -> Entender -> Optimizar -> Verificar**. Herramientas: `perf`, `flamegraph`, `criterion`, `heaptrack`, `cargo-llvm-lines`.
 
 ### 🎯 Conceptos Clave
@@ -290,11 +292,13 @@ fn bench_counters(c: &mut Criterion) {
 
 ---
 
-## 📅 SEMANA 20: ESPECIALIZACIÓN — ELIGE TU CAMINO MAESTRO
+## 📅 Semana 20: especialización — elige tu camino
 **Objetivo:** Aplicar todo el conocimiento en un dominio profundo. **Elige UNA** ruta y ejecútala a nivel de producción.
 
-### 🛤️ RUTA A: EMBEDDED ASYNC (`no_std` + `embassy`)
-> *Rust sin OS. Determinismo. Hardware real.*
+### 🛤️ Ruta A: embedded async (`no_std` + `embassy`)
+!!! quote ""
+
+    *Rust sin OS. Determinismo. Hardware real.*
 
 **Conceptos Clave:**
 *   **`#![no_std]`**: Sin `std`, solo `core` + `alloc` (opcional). `panic_handler` propio (`defmt` + `panic-probe`, logs vía `probe-rs run`).
@@ -314,8 +318,10 @@ fn bench_counters(c: &mut Criterion) {
 3.  **CI:** Compila para `thumbv6m-none-eabi` / `thumbv7em-none-eabihf`. Test en **QEMU** (`qemu-system-arm -M raspi2b` o `nucleo-f429zi`).
 4.  **Entregable:** Binario `.elf` flasheable. `defmt` logs en terminal. `README` con esquemático Fritzing/KiCad.
 
-### 🛤️ RUTA B: PROCEDURAL MACROS (Compiler Plugin)
-> *Extender el lenguaje. `#[derive(Magic)]`.*
+### 🛤️ Ruta B: macros procedurales (plugins del compilador)
+!!! quote ""
+
+    *Extender el lenguaje. `#[derive(Magic)]`.*
 
 **Conceptos Clave:**
 *   **`proc-macro` crate type:** `proc_macro` crate (no bin/lib). `proc_macro::TokenStream` in/out.
@@ -349,8 +355,10 @@ struct ConfigBuilderInit; struct ConfigBuilderReady;
 ```
 **Requisitos:** Soportar `default`, `setter(into)`, `setter(strip_option)`, `each`, `default_code`, `build_fn(validate = "...")`. **Tests exhaustivos** (compile-fail para campos faltantes, runtime para validación).
 
-### 🛤️ RUTA C: MONOREPO WORKSPACE ARQUITECTURA LIMPIA
-> *Escala organizacional. Separación de concerns. Build unificado.*
+### 🛤️ Ruta C: monorepo con workspace y arquitectura limpia
+!!! quote ""
+
+    *Escala organizacional. Separación de concerns. Build unificado.*
 
 **Estructura Objetivo:**
 ```text
@@ -389,7 +397,7 @@ my-ecosystem/
 
 ---
 
-## 📚 RESUMEN RECURSOS MES 5
+## 📚 Recursos del Mes 5
 
 | Semana | Lectura Obligatoria (Deep Dive) | Video / Referencia | Práctica Clave |
 | :--- | :--- | :--- | :--- |
@@ -400,7 +408,7 @@ my-ecosystem/
 
 ---
 
-## ⚠️ PROBLEMAS COMUNES MES 5 (NIVEL SENIOR)
+## ⚠️ Problemas comunes del Mes 5 (nivel senior)
 
 | Área | Trampa | Síntoma | Solución Senior |
 | :--- | :--- | :--- | :--- |
@@ -415,9 +423,11 @@ my-ecosystem/
 
 ---
 
-## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+## 🧩 Material complementario: laboratorio de código comentado
 
-> Todos los ejemplos **compilan y corren con Rust 1.85+ (edición 2024) usando SOLO `std`** — incluyendo el actor (con `std::sync::mpsc` + `std::thread`) y el contador concurrente. No requieren `tokio`, `crossbeam`, `rayon` ni `criterion`. Los marcados `// ❌ NO COMPILA` demuestran las garantías que el sistema de tipos te regala.
+!!! info "Sobre los ejemplos"
+
+    Todos los ejemplos **compilan y corren con Rust 1.85+ (edición 2024) usando SOLO `std`** — incluyendo el actor (con `std::sync::mpsc` + `std::thread`) y el contador concurrente. No requieren `tokio`, `crossbeam`, `rayon` ni `criterion`. Los marcados `// ❌ NO COMPILA` demuestran las garantías que el sistema de tipos te regala.
 
 ### 1️⃣ Newtype: tipos fuertes con validación
 
@@ -473,7 +483,9 @@ fn main() {
 }
 ```
 
-> Este es el *killer feature* de la Semana 17: estados inválidos **no se pueden expresar**. El compilador, no un `if` en runtime, garantiza que nunca llamas `click()` sobre una URL expirada. `PhantomData<S>` ocupa 0 bytes ⇒ abstracción de coste cero.
+!!! note "Idea clave"
+
+    Este es el *killer feature* de la Semana 17: estados inválidos **no se pueden expresar**. El compilador, no un `if` en runtime, garantiza que nunca llamas `click()` sobre una URL expirada. `PhantomData<S>` ocupa 0 bytes ⇒ abstracción de coste cero.
 
 ### 3️⃣ Builder con typestate: campos requeridos verificados en compile-time
 
@@ -540,7 +552,9 @@ fn start_counter() -> (CounterHandle, thread::JoinHandle<()>) {
 // assert_eq!(handle.get(), 4000);
 ```
 
-> *"No compartas memoria para comunicarte; comunica para compartir memoria."* El estado (`count`) es **local** al hilo del actor; la concurrencia se serializa por la cola de mensajes. La versión Tokio (Semana 17) es idéntica cambiando `std::thread`/`mpsc` por `tokio::spawn`/`tokio::sync::mpsc`.
+!!! quote ""
+
+    *"No compartas memoria para comunicarte; comunica para compartir memoria."* El estado (`count`) es **local** al hilo del actor; la concurrencia se serializa por la cola de mensajes. La versión Tokio (Semana 17) es idéntica cambiando `std::thread`/`mpsc` por `tokio::spawn`/`tokio::sync::mpsc`.
 
 ### 5️⃣ Contador sharded + *false sharing* evitado con padding
 
@@ -566,7 +580,9 @@ impl Sharded {
 // 8 hilos × 10_000 incrementos, cada uno en su shard ⇒ total == 80_000, sin contención.
 ```
 
-> **`#[repr(align(64))]` es la diferencia entre escalar y colapsar.** Sin él, varios `AtomicUsize` caen en la misma línea de cache y los núcleos se la invalidan mutuamente (false sharing): el throughput *baja* al añadir hilos. Mídelo con `perf stat -e cache-misses`.
+!!! note "`#[repr(align(64))]` es la diferencia entre escalar y colapsar"
+
+    Sin él, varios `AtomicUsize` caen en la misma línea de cache y los núcleos se la invalidan mutuamente (false sharing): el throughput *baja* al añadir hilos. Mídelo con `perf stat -e cache-misses`.
 
 ### 6️⃣ `Cow`: clona solo cuando hay que mutar
 
@@ -585,11 +601,13 @@ assert!(matches!(normalizar("limpio"),       Cow::Borrowed(_)));
 assert!(matches!(normalizar("con espacio"),  Cow::Owned(_)));
 ```
 
-> El patrón de optimización de la Semana 19: el caso común (sin cambios) no asigna memoria; solo pagas el `clone` cuando realmente modificas. Ideal para funciones que *a veces* transforman su entrada.
+!!! note "Idea clave"
+
+    El patrón de optimización de la Semana 19: el caso común (sin cambios) no asigna memoria; solo pagas el `clone` cuando realmente modificas. Ideal para funciones que *a veces* transforman su entrada.
 
 ---
 
-## ✅ CHECKLIST FINAL MES 5 (Definition of Done — Senior Rustacean)
+## ✅ Checklist final del Mes 5 (definition of done: senior Rustacean)
 
 ### 1. Arquitectura & Patrones (Refactor Url Shortener v3)
 - [ ] **Typestate:** `Url<Draft>` -> `Url<Active>` -> `Url<Expired>`. **Imposible** compilar lógica inválida (click en expirado).
@@ -635,7 +653,7 @@ assert!(matches!(normalizar("con espacio"),  Cow::Owned(_)));
 
 ---
 
-### 🎓 GRADUACIÓN DEL CURSO: TU PORTFOLIO RUST
+### 🎓 Graduación: tu portafolio de Rust
 
 Al finalizar el Mes 5, tu GitHub/GitLab debe demostrar:
 
@@ -648,9 +666,11 @@ Al finalizar el Mes 5, tu GitHub/GitLab debe demostrar:
 
 ---
 
-### 🚀 MES 6: CAPSTONE & ESPECIALIZACIÓN FINAL
-> **El último tramo. Integración total.**
-> *Diseñar, implementar, documentar y defender un sistema complejo real (Distribuido, Data Engine, Game Engine, Compiler, Kernel Module, Blockchain, ML Inference Server).*
-> **Tu "Master Thesis" en código Rust.**
+### 🚀 Próximo paso: Mes 6, capstone y especialización final
+!!! abstract "Lo que viene"
+
+    **El último tramo. Integración total.**
+    *Diseñar, implementar, documentar y defender un sistema complejo real (Distribuido, Data Engine, Game Engine, Compiler, Kernel Module, Blockchain, ML Inference Server).*
+    **Tu "Master Thesis" en código Rust.**
 
 *Has llegado al nivel donde Rust no es un lenguaje, es una herramienta de ingeniería de sistemas de precisión. Úsala con responsabilidad.* 🦀🏗️⚡

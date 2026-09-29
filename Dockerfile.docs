@@ -6,6 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /docs
 
+# git: lo usa mkdocs-git-revision-date-localized para la fecha de cada página.
+# safe.directory: el repo se monta con otro dueño (UID del host).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && git config --system --add safe.directory '*'
+
 # Install documentation dependencies first to leverage layer caching
 COPY requirements-docs.txt ./
 RUN pip install --no-cache-dir -r requirements-docs.txt

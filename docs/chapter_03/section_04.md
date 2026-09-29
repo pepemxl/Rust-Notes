@@ -18,10 +18,12 @@ En esta sección aprenderemos:
 - Imagen final con `distroless`, binario sin símbolos, usuario sin privilegios.
 - Pipeline completo de CI/CD con GitHub Actions: lint, test, build multi-arch, push.
 
-> 💡 **Filosofía de la Semana 12:** *Un servicio que no puedes observar es un servicio
-> que no puedes operar. Los logs, las métricas y los health checks no son opcionales en
-> producción — son la interfaz entre tu código y las personas que lo mantienen a las 3
-> de la mañana.*
+!!! quote "Filosofía de la Semana 12"
+
+    *Un servicio que no puedes observar es un servicio
+    que no puedes operar. Los logs, las métricas y los health checks no son opcionales en
+    producción — son la interfaz entre tu código y las personas que lo mantienen a las 3
+    de la mañana.*
 
 ---
 
@@ -1137,7 +1139,9 @@ docker compose down
 - [ ] Migraciones se aplican automáticamente al arrancar (`sqlx::migrate!`).
 - [ ] `SIGTERM` → apagado graceful (respuestas en vuelo se completan antes de cerrar).
 
-> **Fin del Mes 3.** Has construido un servicio web observable, tipado, seguro y
-> contenedorizado. El Mes 4 baja al metal: FFI, CLI profesional y WebAssembly.
->
-> **Siguiente paso:** Mes 4 — [Sistemas, CLI avanzado y WASM](../chapter_04/section_00.md).
+!!! success "Fin del Mes 3"
+
+    Has construido un servicio web observable, tipado, seguro y
+    contenedorizado. El Mes 4 baja al metal: FFI, CLI profesional y WebAssembly.
+
+    **Siguiente paso:** Mes 4 — [Sistemas, CLI avanzado y WASM](../chapter_04/section_00.md).

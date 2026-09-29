@@ -18,9 +18,11 @@ En esta sección aprenderemos:
   `spawn_blocking`.
 - La regla de oro de `Send + Sync` en async.
 
-> 💡 **Filosofía de la Semana 9:** *Async en Rust no es magia — es una máquina de
-> estados generada por el compilador que necesita un executor para avanzar. Cuando
-> entiendes eso, cada error de compilación relacionado con `async` se vuelve legible.*
+!!! quote "Filosofía de la Semana 9"
+
+    *Async en Rust no es magia — es una máquina de
+    estados generada por el compilador que necesita un executor para avanzar. Cuando
+    entiendes eso, cada error de compilación relacionado con `async` se vuelve legible.*
 
 ---
 
@@ -129,7 +131,27 @@ llamaría cuando hubiera datos disponibles.
 
 ## Un mini-executor: `block_on`
 
-Para ver el ciclo completo, construyamos el executor más simple posible con solo `std`:
+El ciclo completo entre el executor, la future y el `Waker` es este:
+
+```mermaid
+sequenceDiagram
+    participant E as Executor
+    participant F as Future
+    participant R as Recurso (socket, timer…)
+    E->>F: poll(cx)
+    F->>R: ¿listo?
+    R-->>F: todavía no
+    F->>R: guarda cx.waker().clone()
+    F-->>E: Poll::Pending
+    Note over E: el executor atiende otras tareas<br/>(o duerme si no hay ninguna)
+    R->>E: waker.wake() cuando hay datos
+    E->>F: poll(cx) otra vez
+    F->>R: ¿listo?
+    R-->>F: sí, aquí están los datos
+    F-->>E: Poll::Ready(valor)
+```
+
+Para ver ese ciclo en código, construyamos el executor más simple posible con solo `std`:
 
 ```rust
 use std::future::Future;
@@ -254,6 +276,22 @@ impl Future for FlujoDatosFut {
         }
     }
 }
+```
+
+Visto como diagrama de estados, cada `poll` avanza la máquina hasta el siguiente `.await`
+que no esté listo. Llamar a `flujo(id)` solo crea el estado `Inicio`; cada flecha
+`Pending` es un `poll` que devuelve el control al executor sin cambiar de estado:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Inicio: flujo(id)
+    Inicio --> EsperandoUsuario: 1er poll
+    EsperandoUsuario --> EsperandoUsuario: Pending
+    EsperandoUsuario --> EsperandoPosts: Ready(usuario)
+    EsperandoPosts --> EsperandoPosts: Pending
+    EsperandoPosts --> Hecho: Ready(posts)
+    Hecho --> [*]
 ```
 
 Esto explica varias cosas que antes parecían arbitrarias:
@@ -549,7 +587,8 @@ Usa `spawn_blocking` para:
 
 ### La regla
 
-> **Todo lo que atraviese un `.await` dentro de una tarea `spawn` debe ser `Send`.**
+!!! note "Todo lo que atraviese un `.await` dentro de una tarea `spawn` debe ser `Send`"
+
 
 El compilador verifica esto. Si guardas un valor `!Send` en una variable y luego haces
 `.await` sin haberlo soltado, el compilador emite un error que puede ser confuso:
@@ -886,4 +925,6 @@ demostrando la concurrencia cooperativa de async Rust.
   un `.await` y cuáles son las dos soluciones.
 - [ ] El ejercicio "Toykio" compila y muestra las tres tareas intercaladas.
 
-> **Siguiente paso:** Semana 10 — [Tokio Ecosistema y Axum: construyendo el servidor](section_02.md).
+!!! abstract "Siguiente paso"
+
+    Semana 10 — [Tokio Ecosistema y Axum: construyendo el servidor](section_02.md).

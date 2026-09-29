@@ -4,8 +4,10 @@ Notas de un curso de **Rust en 6 meses**: desde instalar el compilador hasta ent
 servicio completo, observable y listo para producción. Cada semana combina teoría,
 ejemplos que compilan y un mini-proyecto que se reutiliza en los meses siguientes.
 
-> **¿Primera vez aquí?** Empieza por [¿Por qué Rust?](chapter_00/section_01.md) y
-> después [Instalación y primeros pasos](chapter_01/section_01.md).
+!!! note "¿Primera vez aquí?"
+
+    Empieza por [¿Por qué Rust?](chapter_00/section_01.md) y
+    después [Instalación y primeros pasos](chapter_01/section_01.md).
 
 ---
 
@@ -46,13 +48,36 @@ un laboratorio de código) y termina con un **hito** que conviene cumplir antes 
 
 ## Cómo leer estas notas
 
+Las notas usan recuadros de colores con un significado fijo:
+
+!!! quote "Filosofía"
+
+    La idea central de la semana o del mes.
+
+!!! tip "Consejo"
+
+    Un atajo, un hábito o una regla práctica.
+
+!!! warning "Cuidado"
+
+    Un error común o un comportamiento sorprendente.
+
+!!! note "Idea clave"
+
+    Un concepto que conviene releer.
+
+??? success "Solución (haz clic para abrirla)"
+
+    Las soluciones de los mini-retos vienen cerradas: intenta resolverlos antes de abrirlas.
+
+Además:
+
 | Marca | Significado |
 | :--- | :--- |
-| 💡 | Idea clave o consejo práctico. |
-| ⚠️ | Error común o comportamiento sorprendente. |
 | `// ❌ NO COMPILA` | Ejemplo **intencionalmente** incorrecto, para leer el error del compilador. |
 | 🧪 **Mini-reto** | Ejercicio al final de cada sección; resuélvelo antes de seguir. |
 | ✅ **Checklist** | Lo que deberías poder hacer sin mirar las notas. |
+| Siglas subrayadas | Pasa el cursor sobre FFI, UB, GC… para ver su significado. Los términos de Rust (ownership, trait, lifetime…) están en el [glosario](glosario.md). |
 
 Los ejemplos usan **Rust 1.85+ con la edición 2024**. Escríbelos y ejecútalos tú mismo:
 leer código de Rust sin compilarlo enseña la mitad.

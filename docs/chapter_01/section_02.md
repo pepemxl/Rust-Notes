@@ -10,8 +10,10 @@ esta sección aprenderemos:
 - Los flotantes IEEE 754: redondeo, `NaN`, infinito y métodos matemáticos.
 - Cadenas en varias líneas y *raw strings*.
 
-> 💡 **Filosofía:** *Rust no hace conversiones numéricas implícitas ni oculta
-> desbordamientos. Todo lo que podría perder información tiene que estar escrito en el código.*
+!!! quote "Filosofía"
+
+    *Rust no hace conversiones numéricas implícitas ni oculta
+    desbordamientos. Todo lo que podría perder información tiene que estar escrito en el código.*
 
 ---
 
@@ -63,9 +65,11 @@ Paso a paso:
 15/4          -> 3   (división entera: la parte decimal se descarta)
 ```
 
-> 💡 Los espacios alrededor de los operadores son los que pone `cargo fmt`; no cambian la
-> precedencia. Deja que el formateador decida el estilo y usa paréntesis cuando la
-> precedencia no sea obvia para quien lee.
+!!! tip "Consejo"
+
+    Los espacios alrededor de los operadores son los que pone `cargo fmt`; no cambian la
+    precedencia. Deja que el formateador decida el estilo y usa paréntesis cuando la
+    precedencia no sea obvia para quien lee.
 
 ### Operadores compuestos
 
@@ -189,9 +193,11 @@ fn main() {
 }
 ```
 
-> ⚠️ `300_i32 as u8` da `44` (300 − 256) sin avisar. Cuando una conversión puede fallar,
-> usa `u8::try_from(x)`, que devuelve un error en lugar de un valor incorrecto; lo veremos
-> en [Traits avanzados](../chapter_02/section_02.md) (Mes 2).
+!!! warning "Cuidado"
+
+    `300_i32 as u8` da `44` (300 − 256) sin avisar. Cuando una conversión puede fallar,
+    usa `u8::try_from(x)`, que devuelve un error en lugar de un valor incorrecto; lo veremos
+    en [Traits avanzados](../chapter_02/section_02.md) (Mes 2).
 
 El sufijo `_i32`, `_f64`, `_u8` en un literal fija su tipo (`3.99_f64` es un `f64`). Los
 tipos numéricos se estudian en detalle en la [siguiente sección](section_03.md).
@@ -303,8 +309,10 @@ fn main() {
 }
 ```
 
-> ⚠️ Para dinero **no uses flotantes**: guarda centavos en un entero (`i64`) o usa una
-> crate de decimales como `rust_decimal`.
+!!! warning "Cuidado"
+
+    Para dinero **no uses flotantes**: guarda centavos en un entero (`i64`) o usa una
+    crate de decimales como `rust_decimal`.
 
 ### Infinito y `NaN`
 
@@ -420,6 +428,23 @@ Extensiones:
   `celsius * 9 / 5 + 32`? Explica cada error o resultado.
 - Cambia `total_segundos` a un valor mayor que `u32::MAX` y lee el error del compilador.
 
+??? success "Solución"
+
+    Intenta resolverlo antes de abrir esto. Código completo en [`calculadora`](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/calculadora/src/main.rs).
+
+    ```rust
+    --8<-- "src/chapter_01/calculadora/src/main.rs"
+    ```
+
+??? question "Respuesta a las extensiones"
+
+    - `celsius * (9 / 5) + 32.0` **no compila**: `9 / 5` es una división entera (da `1`)
+      y un `f64` no se puede multiplicar por un entero. Con `(9.0 / 5.0)` sí funciona.
+    - `celsius * 9 / 5 + 32` **no compila**: `celsius` es `f64` y `9`, `5` y `32` son
+      enteros; Rust no convierte implícitamente.
+    - Un literal mayor que `u32::MAX` (4 294 967 295) activa el lint `overflowing_literals`,
+      que es un **error** por defecto: `literal out of range for u32`.
+
 ---
 
 ## ✅ Checklist
@@ -435,4 +460,6 @@ Extensiones:
 - [ ] Uso los métodos matemáticos de `f64` (`sqrt`, `powi`, `abs`, `round`…).
 - [ ] Escribo cadenas en varias líneas con `\` y *raw strings* con `r"..."`.
 
-> **Siguiente paso:** [Variables, tipos, funciones y control de flujo](section_03.md).
+!!! abstract "Siguiente paso"
+
+    [Variables, tipos, funciones y control de flujo](section_03.md).

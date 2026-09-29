@@ -1,10 +1,12 @@
-# 🦀 MES 2: PROGRAMACIÓN GENÉRICA, TRAITS Y TESTING — Guía Detallada
-> **Filosofía del Mes:** *"Las abstracciones en Rust tienen costo cero en runtime. El costo se paga en compile-time (monomorphization) y en complejidad mental. Aprende a diseñar APIs que el compilador pueda optimizar agresivamente."*
-> **Meta:** Dejar de escribir `fn foo(x: String)` y empezar a escribir `fn foo<S: AsRef<str>>(x: S)`. Dominar `dyn Trait` vs `impl Trait`. Publicar tu primera *crate* profesional.
+# Mes 2: programación genérica, traits y testing — guía de estudio
+!!! quote "Filosofía del Mes"
+
+    *"Las abstracciones en Rust tienen costo cero en runtime. El costo se paga en compile-time (monomorphization) y en complejidad mental. Aprende a diseñar APIs que el compilador pueda optimizar agresivamente."*
+    **Meta:** Dejar de escribir `fn foo(x: String)` y empezar a escribir `fn foo<S: AsRef<str>>(x: S)`. Dominar `dyn Trait` vs `impl Trait`. Publicar tu primera *crate* profesional.
 
 ---
 
-## 📅 SEMANA 5: GENERICS, TRAITS BOUNDS Y LIFETIMES (La base de la reutilización)
+## 📅 Semana 5: generics, trait bounds y lifetimes (la base de la reutilización)
 
 ### 🎯 Conceptos Clave
 
@@ -33,8 +35,10 @@
 *   **`'static`:** Vive toda la ejecución del programa. String literals (`"hello"`), `Box::leak`, globals. **Evita `'static` bounds en generics** a menos que sea necesario (ej. `thread::spawn` requiere `Send + 'static`).
 
 ### 🧠 Recurso Visual Obligatorio
-> **Jon Gjengset - "Crust of Rust: Lifetimes" (YouTube, ~2h)**
-> *Ver secciones: Struct lifetimes, Lifetime elision, `'static`, Variance (covariance/contravariance intro).*
+!!! note "Recurso recomendado"
+
+    **Jon Gjengset - "Crust of Rust: Lifetimes" (YouTube, ~2h)**
+    *Ver secciones: Struct lifetimes, Lifetime elision, `'static`, Variance (covariance/contravariance intro).*
 
 ### 📝 Ejercicios Rustlings (Semana 5)
 *   `generics/` (structs, enums, methods, bounds).
@@ -165,7 +169,7 @@ mod tests {
 
 ---
 
-## 📅 SEMANA 6: TRAITS AVANZADOS (La "Standard Library" de tus tipos)
+## 📅 Semana 6: traits avanzados (la "standard library" de tus tipos)
 
 ### 🎯 Conceptos Clave
 
@@ -285,7 +289,7 @@ takes_write(&mut buf);  // DerefMut coercion: &mut ByteBuffer -> &mut Vec<u8> ->
 
 ---
 
-## 📅 SEMANA 7: SMART POINTERS & INTERIOR MUTABILITY (Compartiendo Estado)
+## 📅 Semana 7: smart pointers e interior mutability (compartiendo estado)
 
 ### 🎯 Conceptos Clave
 
@@ -322,8 +326,10 @@ Rompe la regla " `&T` inmutable, `&mut T` mutable" **de forma segura en runtime*
 *   **Usos:** Parent pointers en árboles/grafos, Caches, Observer pattern.
 
 ### 🧠 Recurso Visual Obligatorio
-> **Jon Gjengset - "Crust of Rust: Interior Mutability" (YouTube)**
-> *Entender `UnsafeCell` (la primitiva mágica), `RefCell` vs `Mutex`, `Weak` para ciclos.*
+!!! note "Recurso recomendado"
+
+    **Jon Gjengset - "Crust of Rust: Interior Mutability" (YouTube)**
+    *Entender `UnsafeCell` (la primitiva mágica), `RefCell` vs `Mutex`, `Weak` para ciclos.*
 
 ### 🧪 Ejercicio Práctico: **Grafo Dirigido con Ciclos (`Graph<NodeId, NodeData>`)**
 **Objetivo:** `Rc`/`Weak` para estructura, `RefCell` para mutabilidad de nodos/aristas, evitar memory leaks.
@@ -399,7 +405,7 @@ impl<D> Graph<D> {
 
 ---
 
-## 📅 SEMANA 8: TESTING, DOCUMENTACIÓN Y TOOLING (Calidad Profesional)
+## 📅 Semana 8: testing, documentación y tooling (calidad profesional)
 
 ### 🎯 Conceptos Clave
 
@@ -526,7 +532,7 @@ group_imports = "StdExternalCrate"
 
 ---
 
-## 🛠️ PROYECTO INTEGRADOR MES 2: `config-loader` (Librería Publicable)
+## 🛠️ Proyecto integrador del Mes 2: `config-loader` (librería publicable)
 
 ### 🎯 Objetivo
 Crear una crate **library** (`--lib`) robusta, genérica, bien testeada, documentada y publicable en `crates.io`.
@@ -644,7 +650,7 @@ jobs:
 
 ---
 
-## 📚 RESUMEN RECURSOS MES 2
+## 📚 Recursos del Mes 2
 
 | Semana | Lectura "The Book" | Video Profundo | Práctica Clave |
 | :--- | :--- | :--- | :--- |
@@ -655,7 +661,7 @@ jobs:
 
 ---
 
-## ⚠️ PROBLEMAS COMUNES MES 2 (Y SOLUCIONES)
+## ⚠️ Problemas comunes del Mes 2 (y soluciones)
 
 | Trampa | Síntoma | Solución |
 | :--- | :--- | :--- |
@@ -669,9 +675,11 @@ jobs:
 
 ---
 
-## 🧩 MATERIAL COMPLEMENTARIO: Laboratorio de Código Comentado
+## 🧩 Material complementario: laboratorio de código comentado
 
-> Todos los ejemplos **compilan con Rust 1.85+ (edición 2024)**. Los marcados con `// ❌ NO COMPILA` son errores *intencionales*: léelos como una lección sobre lo que el compilador te impide hacer.
+!!! info "Sobre los ejemplos"
+
+    Todos los ejemplos **compilan con Rust 1.85+ (edición 2024)**. Los marcados con `// ❌ NO COMPILA` son errores *intencionales*: léelos como una lección sobre lo que el compilador te impide hacer.
 
 ### 1️⃣ Generics + trait bounds + monomorphization
 
@@ -699,7 +707,9 @@ fn main() {
 }
 ```
 
-> **Monomorphization:** el compilador genera una copia de `mayor` por cada tipo concreto usado (`mayor::<i32>`, `mayor::<f64>`). Cero coste en runtime; el precio se paga en tiempo de compilación y tamaño del binario.
+!!! note "Monomorphization"
+
+    El compilador genera una copia de `mayor` por cada tipo concreto usado (`mayor::<i32>`, `mayor::<f64>`). Cero coste en runtime; el precio se paga en tiempo de compilación y tamaño del binario.
 
 ### 2️⃣ `impl Trait` en argumento y en retorno
 
@@ -796,7 +806,9 @@ fn main() {
 }
 ```
 
-> **Regla de oro:** `Deref` debe ser barato e infalible (nunca devuelve `Result`). Es para *smart pointers* y newtypes, no para conversiones con lógica.
+!!! tip "Regla de oro"
+
+    `Deref` debe ser barato e infalible (nunca devuelve `Result`). Es para *smart pointers* y newtypes, no para conversiones con lógica.
 
 ### 6️⃣ `dyn Trait`: dispatch dinámico y colecciones heterogéneas
 
@@ -852,7 +864,9 @@ fn main() {
 }
 ```
 
-> Si `padre` y `hijo` se apuntaran mutuamente con `Rc` (Strong), el contador nunca llegaría a 0 → **fuga de memoria**. `Weak` es lo que lo evita.
+!!! note "Idea clave"
+
+    Si `padre` y `hijo` se apuntaran mutuamente con `Rc` (Strong), el contador nunca llegaría a 0 → **fuga de memoria**. `Weak` es lo que lo evita.
 
 ### 8️⃣ Testing con mock vía trait (inyección de dependencias)
 
@@ -888,11 +902,13 @@ mod tests {
 }
 ```
 
-> Esta es la técnica que hace **deterministas** los tests del ejercicio `Cache<K, V>` de la Semana 5: abstraes el tiempo (o cualquier dependencia: red, disco) tras un trait y le pasas un mock en los tests.
+!!! note "Idea clave"
+
+    Esta es la técnica que hace **deterministas** los tests del ejercicio `Cache<K, V>` de la Semana 5: abstraes el tiempo (o cualquier dependencia: red, disco) tras un trait y le pasas un mock en los tests.
 
 ---
 
-## ✅ CHECKLIST FINAL MES 2 (Definition of Done)
+## ✅ Checklist final del Mes 2 (definition of done)
 
 - [ ] **Generics & Bounds:** Escribes `fn foo<T: Trait>(x: T)` y `fn bar() -> impl Trait` naturalmente. Entiendes monomorphization.
 - [ ] **Lifetimes:** Anotas lifetimes en structs con referencias correctamente. Entiendes elision rules y cuándo el compilador necesita ayuda. `'static` bound entendido.
@@ -914,8 +930,10 @@ mod tests {
 
 ---
 
-### 🚀 PRÓXIMO PASO: MES 3
-> **ASYNC RUST: Futures, Pin, Tokio, Axum, SQLx, Observabilidad, Docker.**
-> *Donde el "Fearless Concurrency" brilla de verdad.*
+### 🚀 Próximo paso: Mes 3
+!!! abstract "Lo que viene"
+
+    **ASYNC RUST: Futures, Pin, Tokio, Axum, SQLx, Observabilidad, Docker.**
+    *Donde el "Fearless Concurrency" brilla de verdad.*
 
 *Has sobrevivido a la curva de aprendizaje. Ahora construyes sistemas.* 🦀⚙️

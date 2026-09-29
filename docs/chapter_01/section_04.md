@@ -12,9 +12,11 @@ En esta sección aprenderemos:
 - Las **referencias** (`&T` y `&mut T`) y la regla del *borrow checker*.
 - Los **slices** (`&str`, `&[T]`) como vistas sin ownership.
 
-> 💡 **Filosofía de la Semana 2:** *El borrow checker no te persigue; te protege. Cada
-> error de compilación que evita hoy es un segfault o un data race que no verás en
-> producción.*
+!!! quote "Filosofía de la Semana 2"
+
+    *El borrow checker no te persigue; te protege. Cada
+    error de compilación que evita hoy es un segfault o un data race que no verás en
+    producción.*
 
 ---
 
@@ -170,9 +172,11 @@ s1 → ptr ──▶ [h,o,l,a]    (heap original)
 s2 → ptr ──▶ [h,o,l,a]    (nueva copia en heap)
 ```
 
-> ⚠️ `.clone()` es **costoso** cuando los datos son grandes: O(N) en tiempo y memoria.
-> No lo uses por pánico para "que compile". Úsalo cuando de verdad necesites dos versiones
-> independientes del dato.
+!!! warning "Cuidado"
+
+    `.clone()` es **costoso** cuando los datos son grandes: O(N) en tiempo y memoria.
+    No lo uses por pánico para "que compile". Úsalo cuando de verdad necesites dos versiones
+    independientes del dato.
 
 ---
 
@@ -279,9 +283,11 @@ fn main() {
 
 Esta es la regla más importante del *borrow checker*, y la que más confunde al principio:
 
-> **En cualquier momento, puedes tener CUALQUIERA de estas dos cosas, pero NUNCA ambas:**
-> - Una o más referencias inmutables (`&T`)
-> - Exactamente una referencia mutable (`&mut T`)
+!!! tip "La regla de los préstamos"
+
+    **En cualquier momento, puedes tener CUALQUIERA de estas dos cosas, pero NUNCA ambas:**
+    - Una o más referencias inmutables (`&T`)
+    - Exactamente una referencia mutable (`&mut T`)
 
 ```rust
 fn main() {
@@ -494,6 +500,22 @@ fn main() {
 | `&[T]` | Slice de colección (fat ptr) | O(1) | No |
 | `&mut [T]` | Slice mutable de colección | O(1) | Sí |
 
+### ¿Cómo paso este valor a una función?
+
+Juntando todo lo anterior, la decisión al escribir la firma de una función se reduce a
+unas pocas preguntas:
+
+```mermaid
+flowchart TD
+    A["¿La función necesita quedarse<br/>con el valor (guardarlo, devolverlo<br/>transformado, moverlo a otro hilo)?"]
+    A -- Sí --> B["¿Quien llama lo sigue<br/>necesitando después?"]
+    B -- No --> M["Pásalo por valor: <b>T</b><br/>(move; gratis si es Copy)"]
+    B -- Sí --> C["Quien llama hace <b>.clone()</b><br/>y pasa la copia por valor"]
+    A -- No --> D["¿Necesita modificarlo?"]
+    D -- Sí --> R2["<b>&mut T</b><br/>préstamo exclusivo"]
+    D -- No --> R1["<b>&T</b><br/>préstamo compartido<br/>(<b>&str</b> / <b>&[T]</b> para texto y colecciones)"]
+```
+
 ---
 
 ## El ciclo de ownership completo
@@ -545,59 +567,23 @@ fn main() {
 Implementa tu propia función de división de strings **sin usar** `.split()`,
 `.split_whitespace()` ni `.chars().collect()`.
 
-Crea un proyecto con `cargo new split_manual` y escribe en `src/main.rs`:
+Crea un proyecto con `cargo new split_manual`. La función debe tener esta firma
+(`fn split_manual<'a>(input: &'a str, delimiter: char) -> Vec<&'a str>`) y pasar estos
+tests, que funcionan como especificación:
 
 ```rust
-fn split_manual<'a>(input: &'a str, delimiter: char) -> Vec<&'a str> {
-    let mut result = Vec::new();
-    let mut start = 0;
-    for (i, c) in input.char_indices() {
-        if c == delimiter {
-            result.push(&input[start..i]);
-            start = i + delimiter.len_utf8(); // avanzamos en bytes, no en chars
-        }
-    }
-    result.push(&input[start..]);            // último trozo
-    result
-}
-
-fn main() {
-    let partes = split_manual("hola,mundo,rust", ',');
-    for p in &partes {
-        println!("{p}");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_basico() {
-        assert_eq!(split_manual("a,b,c", ','), vec!["a", "b", "c"]);
-    }
-
-    #[test]
-    fn test_espacios() {
-        assert_eq!(split_manual("hola mundo", ' '), vec!["hola", "mundo"]);
-    }
-
-    #[test]
-    fn test_sin_delimitador() {
-        assert_eq!(split_manual("texto", 'x'), vec!["te", "to"]);
-    }
-
-    #[test]
-    fn test_vacio() {
-        assert_eq!(split_manual("", ','), vec![""]);
-    }
-
-    #[test]
-    fn test_delimitador_al_final() {
-        assert_eq!(split_manual("a,", ','), vec!["a", ""]);
-    }
-}
+--8<-- "src/chapter_01/split_manual/src/main.rs:tests"
 ```
+
+Pista: recorre el texto con `char_indices()`, que da la posición **en bytes** de cada carácter.
+
+??? success "Solución"
+
+    Intenta resolverlo antes de abrir esto. Código completo en [`split_manual`](https://github.com/pepemxl/Rust-Notes/blob/master/src/chapter_01/split_manual/src/main.rs).
+
+    ```rust
+    --8<-- "src/chapter_01/split_manual/src/main.rs:solucion"
+    ```
 
 Ejecútalo con `cargo run` y luego `cargo test`. Fíjate en:
 
@@ -620,7 +606,9 @@ Ejecútalo con `cargo run` y luego `cargo test`. Fíjate en:
 - [ ] El ejercicio `split_manual` compila y pasa todos los tests con `cargo test`.
 - [ ] Completo los ejercicios de Rustlings: `move_semantics/`, `references/`, `slices/`.
 
-> **Siguiente paso:** Semana 3 — [Structs, Enums, Pattern Matching y manejo de errores básico](section_00.md).
+!!! abstract "Siguiente paso"
+
+    Semana 3 — [Structs, Enums, Pattern Matching y manejo de errores básico](section_05.md).
 
 ---
 

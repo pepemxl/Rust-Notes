@@ -1,0 +1,11 @@
+[package]
+name = "split_manual"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+
+[dependencies]
+
+# El lifetime 'a explícito es didáctico: la sección explica por qué el retorno es Vec<&'a str>.
+[lints.clippy]
+needless_lifetimes = "allow"

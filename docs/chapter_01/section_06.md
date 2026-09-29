@@ -13,9 +13,11 @@ En esta sección aprenderemos:
 - **Error handling avanzado**: tipos de error propios, el trait `From`, `Box<dyn Error>`.
 - Los **traits estándar** derivables e implementados manualmente.
 
-> 💡 **Filosofía de la Semana 4:** *El código que escala no es el que hace más cosas;
-> es el que mantiene cada cosa en su lugar. Los módulos son la frontera entre "funciona"
-> y "puedo tocar esto sin romper el resto".*
+!!! quote "Filosofía de la Semana 4"
+
+    *El código que escala no es el que hace más cosas;
+    es el que mantiene cada cosa en su lugar. Los módulos son la frontera entre "funciona"
+    y "puedo tocar esto sin romper el resto".*
 
 ---
 
@@ -228,8 +230,10 @@ fn main() {
 
 **Cuándo usar `HashMap<K, V>`**: lookups frecuentes por clave, cachés, agrupaciones.
 
-> ⚠️ `HashMap` **no** garantiza orden de iteración. Si necesitas iterar en orden de
-> inserción o de clave, usa `BTreeMap` o una crate como `indexmap`.
+!!! warning "Cuidado"
+
+    `HashMap` **no** garantiza orden de iteración. Si necesitas iterar en orden de
+    inserción o de clave, usa `BTreeMap` o una crate como `indexmap`.
 
 ### `HashSet<T>` — conjunto sin duplicados
 
@@ -960,5 +964,7 @@ cargo clippy    # debe mostrar 0 warnings
 - [ ] Derivo el conjunto correcto de traits (`Debug`, `Clone`, `PartialEq`, `Hash`, `Default`…).
 - [ ] El proyecto `todo_cli` compila con `cargo clippy` limpio, persiste en JSON y los comandos funcionan.
 
-> **¡Mes 1 completado!** El siguiente paso es el **Mes 2**:
-> [Genéricos, Traits avanzados, Lifetimes, Smart Pointers](../chapter_02/section_00.md).
+!!! success "¡Mes 1 completado!"
+
+    El siguiente paso es el **Mes 2**:
+    [Genéricos, Traits avanzados, Lifetimes, Smart Pointers](../chapter_02/section_00.md).

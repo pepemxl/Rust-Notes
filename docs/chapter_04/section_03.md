@@ -18,10 +18,12 @@ En esta sección aprenderemos:
 - Integración con Vite (bundler moderno para vanilla JS/TS).
 - El proyecto completo: **Mandelbrot Explorer**.
 
-> 💡 **Filosofía de la Semana 15:** *Wasm no reemplaza JavaScript — lo extiende. Usas
-> Rust para las partes CPU-intensivas (computación, cifrado, compresión, rendering) y
-> dejas a JS la gestión del DOM y los eventos. La frontera entre ambos mundos es donde
-> está el diseño.*
+!!! quote "Filosofía de la Semana 15"
+
+    *Wasm no reemplaza JavaScript — lo extiende. Usas
+    Rust para las partes CPU-intensivas (computación, cifrado, compresión, rendering) y
+    dejas a JS la gestión del DOM y los eventos. La frontera entre ambos mundos es donde
+    está el diseño.*
 
 ---
 
@@ -426,11 +428,13 @@ static ALLOC: AssumeSingleThreaded<FreeListAllocator> =
     unsafe { AssumeSingleThreaded::new(FreeListAllocator::new()) };
 ```
 
-> ⚠️ **No uses `wee_alloc`.** Aparece en muchos tutoriales antiguos, pero está sin
-> mantenimiento desde 2022 y tiene fugas de memoria conocidas. `lol_alloc` es la
-> alternativa pequeña; si usas hilos (`wasm-bindgen-rayon`, siguiente sección), quédate
-> con el allocator por defecto, porque `AssumeSingleThreaded` no es seguro con varios hilos.
-> Mide antes: con `wasm-opt -Oz` la ganancia del allocator suele ser de pocos KB.
+!!! warning "No uses `wee_alloc`"
+
+    Aparece en muchos tutoriales antiguos, pero está sin
+    mantenimiento desde 2022 y tiene fugas de memoria conocidas. `lol_alloc` es la
+    alternativa pequeña; si usas hilos (`wasm-bindgen-rayon`, siguiente sección), quédate
+    con el allocator por defecto, porque `AssumeSingleThreaded` no es seguro con varios hilos.
+    Mide antes: con `wasm-opt -Oz` la ganancia del allocator suele ser de pocos KB.
 
 Resultados típicos para un módulo de tamaño medio:
 
@@ -1218,4 +1222,6 @@ de punto de partida para practicar lo de esta semana:
 - [ ] El proyecto está desplegado y accesible desde un browser real
   (`npm run dev` o GitHub Pages).
 
-> **Siguiente paso:** Semana 16 — [Parsing y procesamiento de texto: nom, pest, regex](section_04.md).
+!!! abstract "Siguiente paso"
+
+    Semana 16 — [Parsing y procesamiento de texto: nom, pest, regex](section_04.md).

@@ -25,9 +25,11 @@ En esta sección aprenderemos:
 - Cómo hacer el release `v1.0.0` con `cargo-release` y `cargo-dist`.
 - Cómo preparar y grabar la charla técnica de 10 minutos.
 
-> *"El experto en cualquier cosa fue una vez un principiante. La diferencia
-> es que el experto eligió una cosa y no paró."*
-> — Helen Hayes (adaptado)
+!!! quote ""
+
+    *"El experto en cualquier cosa fue una vez un principiante. La diferencia
+    es que el experto eligió una cosa y no paró."*
+    — Helen Hayes (adaptado)
 
 ---
 
@@ -1601,19 +1603,21 @@ PRÓXIMOS PASOS REALES (en orden de impacto):
      Enseñar revela exactamente qué entiendes y qué crees entender.
 ```
 
-> **Habilidades demostradas al completar este curso:**
->
-> ✅ Systems Programming — Ownership, Borrowing, Lifetimes, unsafe con disciplina  
-> ✅ Async & Concurrencia — Tokio, Actor Model, Atomics, Lock-Free, loom  
-> ✅ Backend Engineering — Axum, SQLx, PostgreSQL, Redis, JWT, OpenAPI  
-> ✅ CLI & Developer Experience — Clap, Plugins, Self-update, Completions  
-> ✅ WebAssembly — wasm-bindgen, Leptos SSR, Bundle optimization  
-> ✅ High Performance — Profiling, SIMD, Cache-aware, Custom Allocators  
-> ✅ Software Architecture — Typestate, Hexagonal, ADRs, Monorepo, STRIDE  
-> ✅ Production Readiness — Docker, CI/CD, Observabilidad, Supply Chain Security  
-> ✅ Specialization Depth — Cloud / Systems / WASM / Data / Embedded
+!!! success "Habilidades demostradas al completar este curso"
+
+    ✅ Systems Programming — Ownership, Borrowing, Lifetimes, unsafe con disciplina  
+    ✅ Async & Concurrencia — Tokio, Actor Model, Atomics, Lock-Free, loom  
+    ✅ Backend Engineering — Axum, SQLx, PostgreSQL, Redis, JWT, OpenAPI  
+    ✅ CLI & Developer Experience — Clap, Plugins, Self-update, Completions  
+    ✅ WebAssembly — wasm-bindgen, Leptos SSR, Bundle optimization  
+    ✅ High Performance — Profiling, SIMD, Cache-aware, Custom Allocators  
+    ✅ Software Architecture — Typestate, Hexagonal, ADRs, Monorepo, STRIDE  
+    ✅ Production Readiness — Docker, CI/CD, Observabilidad, Supply Chain Security  
+    ✅ Specialization Depth — Cloud / Systems / WASM / Data / Embedded
 
 ---
 
-> **Siguiente sección:** esta es la sección final del curso. El repositorio
-> del capstone es tu siguiente paso.
+!!! abstract "Siguiente sección"
+
+    Esta es la sección final del curso. El repositorio
+    del capstone es tu siguiente paso.

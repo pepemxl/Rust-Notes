@@ -99,14 +99,29 @@ def extract_blocks(path: Path) -> list[Block]:
     return blocks
 
 
+SECTION_MARK = re.compile(r"--8<--\s*\[(start|end):([\w-]+)\]")
+
+
 def _expand_snippets(body: list[str]) -> list[str]:
+    """Resuelve `--8<-- "ruta"` y `--8<-- "ruta:seccion"` como pymdownx.snippets."""
     out: list[str] = []
     for line in body:
         m = SNIPPET.match(line)
-        if m:
-            out.extend((ROOT / m.group(1)).read_text(encoding="utf-8").splitlines())
-        else:
+        if not m:
             out.append(line)
+            continue
+        path, _, section = m.group(1).partition(":")
+        lines = (ROOT / path).read_text(encoding="utf-8").splitlines()
+        if section:
+            inside, selected = False, []
+            for l in lines:
+                mark = SECTION_MARK.search(l)
+                if mark and mark.group(2) == section:
+                    inside = mark.group(1) == "start"
+                elif inside:
+                    selected.append(l)
+            lines = selected
+        out.extend(l for l in lines if not SECTION_MARK.search(l))
     return out
 
 

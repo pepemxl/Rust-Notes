@@ -50,7 +50,7 @@ docs-serve: ## Serve docs with live reload at http://localhost:8000
 	$(COMPOSE_DOCS) up --build docs
 
 docs-build: ## Render the static site into ./site
-	$(COMPOSE_DOCS) --profile build run --rm build
+	$(COMPOSE_DOCS) --profile build run --build --rm build
 
 docs-down: ## Stop and remove the docs container
 	$(COMPOSE_DOCS) down

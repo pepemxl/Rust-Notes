@@ -16,9 +16,11 @@ En esta sección aprenderemos:
 - Los patrones de código que aparecerán en cada capa: Ports & Adapters,
   DomainError → RFC 9457, health checks y graceful shutdown.
 
-> *"Give me six hours to chop down a tree and I will spend the first four
-> sharpening the axe."*
-> — atribuido a Abraham Lincoln
+!!! quote ""
+
+    *"Give me six hours to chop down a tree and I will spend the first four
+    sharpening the axe."*
+    — atribuido a Abraham Lincoln
 
 ---
 
@@ -1254,4 +1256,6 @@ SECCIÓN 7 — ADRs
 - [ ] Elegiste la ruta de especialización de la Semana 24 (A/B/C/D/E) y lo
   documentaste en el `DESIGN.md` con una justificación de al menos 2 oraciones.
 
-> **Siguiente sección:** [Semana 22-23 — Implementación Core](section_02.md)
+!!! abstract "Siguiente sección"
+
+    [Semana 22-23 — Implementación Core](section_02.md)

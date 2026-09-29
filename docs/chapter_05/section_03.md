@@ -22,10 +22,12 @@ En esta sección aprenderemos:
 - **Proyecto**: Log Parser v2 — tres optimizaciones documentadas con baseline y
   verificación. `OPTIMIZATION_LOG.md` como artefacto obligatorio.
 
-> *"Premature optimization is the root of all evil — but that doesn't mean
-> you shouldn't optimize at all. It means you should optimize the right thing,
-> at the right time, with data to justify it."*
-> — Donald Knuth (y la segunda mitad que todos olvidan)
+!!! quote ""
+
+    *"Premature optimization is the root of all evil — but that doesn't mean
+    you shouldn't optimize at all. It means you should optimize the right thing,
+    at the right time, with data to justify it."*
+    — Donald Knuth (y la segunda mitad que todos olvidan)
 
 ---
 
@@ -1228,4 +1230,6 @@ fn output_json_produce_lineas_validas() {
 - [ ] `cargo test --all-features` pasa los 5 tests de regresión tras cada
   optimización. Ninguna optimización rompe la corrección.
 
-> **Siguiente sección:** [Semana 20 — Especialización: elige tu camino](section_04.md)
+!!! abstract "Siguiente sección"
+
+    [Semana 20 — Especialización: elige tu camino](section_04.md)
