@@ -268,6 +268,8 @@ Es la más usada. Mapea cada fila a un struct que **no** necesita ser `FromRow` 
 macro genera el mapeo basándose en los nombres de columnas:
 
 ```rust
+use sqlx::PgPool;
+
 #[derive(Debug)]
 struct FilaUrl {
     code:       String,
@@ -314,6 +316,8 @@ compilación:
 Para queries que devuelven exactamente una columna:
 
 ```rust
+use sqlx::PgPool;
+
 async fn obtener_clicks(pool: &PgPool, code: &str) -> Option<i64> {
     sqlx::query_scalar!(
         "SELECT clicks FROM urls WHERE code = $1",
@@ -342,7 +346,7 @@ Cuando necesitas reutilizar el mapeo en múltiples queries, `#[derive(FromRow)]`
 ergonómico:
 
 ```rust
-use sqlx::FromRow;
+use sqlx::{FromRow, PgPool};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, FromRow)]
@@ -414,6 +418,8 @@ async fn transferir_clicks(
 ### Savepoints
 
 ```rust
+use sqlx::{Executor, Postgres, Transaction};
+
 async fn con_savepoint(tx: &mut Transaction<'_, Postgres>) -> Result<(), sqlx::Error> {
     tx.execute("SAVEPOINT punto1").await?;
 
@@ -519,6 +525,8 @@ struct SolicitudApi {
 Para no emitir `null` en JSON cuando un campo es `None` o una colección está vacía:
 
 ```rust
+use serde::{Deserialize, Serialize};
+
 #[derive(Serialize, Deserialize)]
 struct RespuestaUrl {
     pub code:       String,
@@ -542,6 +550,8 @@ fn es_cero(n: &u64) -> bool { *n == 0 }
 Cuando un campo puede estar ausente en el JSON de entrada:
 
 ```rust
+use serde::Deserialize;
+
 fn pagina_default() -> u32 { 1 }
 fn limite_default() -> u32 { 20 }
 
@@ -566,6 +576,8 @@ struct Paginacion {
 Mueve los campos de un struct anidado al nivel superior del JSON:
 
 ```rust
+use serde::{Deserialize, Serialize};
+
 #[derive(Serialize, Deserialize)]
 struct Metadatos {
     pub creada_en:  u64,
@@ -593,6 +605,8 @@ struct EntradaUrl {
 ### `#[serde(skip)]`: campos invisibles para Serde
 
 ```rust
+use serde::{Deserialize, Serialize};
+
 #[derive(Serialize, Deserialize)]
 struct CacheEntrada {
     pub code:       String,
@@ -612,7 +626,7 @@ El atributo más poderoso: delega la serialización a un módulo que expone
 use serde::{Deserialize, Serialize};
 
 mod unix_timestamp {
-    use serde::{Deserializer, Serializer};
+    use serde::{Deserialize, Deserializer, Serializer}; // Deserialize: para u64::deserialize
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     pub fn serialize<S: Serializer>(time: &SystemTime, s: S) -> Result<S::Ok, S::Error> {
@@ -641,6 +655,8 @@ struct EntradaUrl {
 Muchas bibliotecas ya proveen módulos `with` listos para usar:
 
 ```rust
+use serde::{Deserialize, Serialize};
+
 use chrono::{DateTime, Utc};
 
 #[derive(Serialize, Deserialize)]
@@ -660,6 +676,8 @@ struct Evento {
 Tres formas de serializar un enum:
 
 ```rust
+use serde::{Deserialize, Serialize};
+
 // 1. Externamente etiquetado (por defecto)
 #[derive(Serialize, Deserialize)]
 enum EventoExterno {
@@ -708,17 +726,25 @@ enum Identificador {
 
 ## Proyecto: Url Shortener v2 (PostgreSQL + SQLx + Serde)
 
-Refactorizamos el proyecto de la Semana 10 para reemplazar `AlmacenMemoria` con
-`AlmacenPostgres`, manteniendo el trait `AlmacenUrls` intacto (Axum ni siquiera nota
-el cambio).
+Refactorizamos el proyecto de la Semana 10 para agregar `AlmacenPostgres` junto a
+`AlmacenMemoria`. El trait `AlmacenUrls` cambia en un punto: sus métodos pasan a ser
+**async**, porque hablar con la base de datos es I/O. Los handlers añaden `.await` en
+cada llamada, pero siguen siendo genéricos sobre `S: AlmacenUrls`: el router elige la
+implementación y los handlers no saben cuál es.
+
+El código completo está en
+[`src/chapter_03/url_shortener_v2`](https://github.com/pepemxl/Rust-Notes/tree/master/src/chapter_03/url_shortener_v2);
+lo que se muestra aquí se incluye directamente de esos archivos, y el CI compila el
+proyecto y ejecuta sus tests contra PostgreSQL real.
 
 ### Nuevas dependencias
 
 ```toml
 [dependencies]
 # ... (las de la Semana 10 se mantienen)
-sqlx = { version = "0.8", features = [
-    "runtime-tokio-rustls",
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls",
     "postgres",
     "macros",
     "migrate",
@@ -729,7 +755,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid   = { version = "1",   features = ["v4", "serde"] }
 
 [dev-dependencies]
-reqwest       = { version = "0.12", features = ["json"] }
+reqwest       = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 testcontainers          = "0.23"
 testcontainers-modules  = { version = "0.11", features = ["postgres"] }
 ```
@@ -737,375 +763,41 @@ testcontainers-modules  = { version = "0.11", features = ["postgres"] }
 ### `migrations/20240901000001_crear_tabla_urls.sql`
 
 ```sql
-CREATE TABLE IF NOT EXISTS urls (
-    code        VARCHAR(10)  PRIMARY KEY,
-    target_url  TEXT         NOT NULL,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    expires_at  TIMESTAMPTZ,
-    clicks      BIGINT       NOT NULL DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_urls_expires
-    ON urls (expires_at)
-    WHERE expires_at IS NOT NULL;
+--8<-- "src/chapter_03/url_shortener_v2/migrations/20240901000001_crear_tabla_urls.sql"
 ```
 
 ### `src/models.rs` — con Serde avanzado
 
 ```rust
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(transparent)]   // le dice a SQLx que es solo un String
-pub struct CodigoCorto(pub String);
-
-impl CodigoCorto {
-    pub fn generar() -> Self {
-        let id = uuid::Uuid::new_v4();
-        let bytes = id.as_bytes();
-        let mut s = String::with_capacity(8);
-        for &b in &bytes[..6] {
-            s.push(match b % 62 {
-                n @ 0..=9  => (b'0' + n) as char,
-                n @ 10..=35 => (b'a' + n - 10) as char,
-                n           => (b'A' + n - 36) as char,
-            });
-        }
-        let nano = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .subsec_nanos();
-        s.push_str(&format!("{:02}", nano % 62));
-        CodigoCorto(s)
-    }
-    pub fn as_str(&self) -> &str { &self.0 }
-}
-
-impl std::fmt::Display for CodigoCorto {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.0.fmt(f) }
-}
-
-/// Fila de la tabla urls — usada con sqlx::FromRow
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct FilaUrl {
-    pub code:       String,
-    pub target_url: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: Option<DateTime<Utc>>,
-    pub clicks:     i64,
-}
-
-/// Modelo de dominio
-#[derive(Debug, Clone)]
-pub struct EntradaUrl {
-    pub codigo:    CodigoCorto,
-    pub url_orig:  String,
-    pub creada_en: DateTime<Utc>,
-    pub expira_en: Option<DateTime<Utc>>,
-    pub clics:     u64,
-}
-
-impl From<FilaUrl> for EntradaUrl {
-    fn from(f: FilaUrl) -> Self {
-        Self {
-            codigo:    CodigoCorto(f.code),
-            url_orig:  f.target_url,
-            creada_en: f.created_at,
-            expira_en: f.expires_at,
-            clics:     f.clicks as u64,
-        }
-    }
-}
-
-/// Cuerpo de la petición POST /shorten
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]  // acepta "targetUrl" además de "url"
-pub struct SolicitudAcortar {
-    pub url: String,
-
-    // El cliente puede pedir expiración opcional
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expira_en_segundos: Option<u64>,
-}
-
-/// Respuesta de POST /shorten — Serde completo para API pública
-#[derive(Debug, Serialize)]
-pub struct RespuestaAcortar {
-    pub codigo:    CodigoCorto,
-    pub url_corta: String,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expira_en: Option<i64>,  // Unix timestamp, None → no expira
-}
-
-/// Estadísticas devueltas por GET /{codigo}/stats
-#[derive(Debug, Serialize)]
-pub struct EstadisticasUrl {
-    pub codigo:    CodigoCorto,
-    pub url_orig:  String,
-
-    #[serde(with = "chrono::serde::ts_seconds")]
-    pub creada_en: DateTime<Utc>,
-
-    #[serde(
-        with = "chrono::serde::ts_seconds_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub expira_en: Option<DateTime<Utc>>,
-
-    pub clics: u64,
-}
-
-impl From<EntradaUrl> for EstadisticasUrl {
-    fn from(e: EntradaUrl) -> Self {
-        Self {
-            codigo:    e.codigo,
-            url_orig:  e.url_orig,
-            creada_en: e.creada_en,
-            expira_en: e.expira_en,
-            clics:     e.clics,
-        }
-    }
-}
+--8<-- "src/chapter_03/url_shortener_v2/src/models.rs"
 ```
 
-### `src/almacen.rs` — añadir `AlmacenPostgres`
+### `src/almacen.rs` — trait async, `AlmacenMemoria` y `AlmacenPostgres`
 
 ```rust
-use sqlx::PgPool;
-use crate::{
-    error::ErrorApp,
-    models::{CodigoCorto, EntradaUrl, FilaUrl},
-};
-
-// (AlmacenUrls trait y AlmacenMemoria de la Semana 10 permanecen sin cambios)
-pub trait AlmacenUrls: Send + Sync + 'static {
-    fn guardar(&self, entrada: EntradaUrl) -> impl std::future::Future<Output = Result<(), ErrorApp>> + Send;
-    fn buscar(&self, codigo: &CodigoCorto) -> impl std::future::Future<Output = Option<EntradaUrl>> + Send;
-    fn incrementar_clics(&self, codigo: &CodigoCorto) -> impl std::future::Future<Output = Option<u64>> + Send;
-    fn listar_todo(&self) -> impl std::future::Future<Output = Vec<EntradaUrl>> + Send;
-}
-
-/// Implementación con PostgreSQL + SQLx
-#[derive(Clone)]
-pub struct AlmacenPostgres {
-    pool: PgPool,
-}
-
-impl AlmacenPostgres {
-    pub fn nuevo(pool: PgPool) -> Self {
-        Self { pool }
-    }
-}
-
-impl AlmacenUrls for AlmacenPostgres {
-    async fn guardar(&self, entrada: EntradaUrl) -> Result<(), ErrorApp> {
-        sqlx::query!(
-            r#"
-            INSERT INTO urls (code, target_url, created_at, expires_at, clicks)
-            VALUES ($1, $2, $3, $4, 0)
-            ON CONFLICT (code) DO NOTHING
-            "#,
-            entrada.codigo.as_str(),
-            entrada.url_orig,
-            entrada.creada_en,
-            entrada.expira_en,
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(|_| ErrorApp::Almacenamiento)?;
-        Ok(())
-    }
-
-    async fn buscar(&self, codigo: &CodigoCorto) -> Option<EntradaUrl> {
-        sqlx::query_as!(
-            FilaUrl,
-            "SELECT code, target_url, created_at, expires_at, clicks
-             FROM urls WHERE code = $1",
-            codigo.as_str()
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .ok()?
-        .map(EntradaUrl::from)
-    }
-
-    async fn incrementar_clics(&self, codigo: &CodigoCorto) -> Option<u64> {
-        sqlx::query_scalar!(
-            "UPDATE urls SET clicks = clicks + 1 WHERE code = $1 RETURNING clicks",
-            codigo.as_str()
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .ok()?
-        .map(|n| n as u64)
-    }
-
-    async fn listar_todo(&self) -> Vec<EntradaUrl> {
-        sqlx::query_as!(
-            FilaUrl,
-            "SELECT code, target_url, created_at, expires_at, clicks
-             FROM urls ORDER BY created_at DESC"
-        )
-        .fetch_all(&self.pool)
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(EntradaUrl::from)
-        .collect()
-    }
-}
+--8<-- "src/chapter_03/url_shortener_v2/src/almacen.rs"
 ```
 
 ### `src/handlers.rs` — handler con expiración
 
 ```rust
-use axum::{extract::{Path, State}, http::StatusCode, response::{IntoResponse, Redirect}, Json};
-use chrono::{Duration, Utc};
-use std::sync::Arc;
+--8<-- "src/chapter_03/url_shortener_v2/src/handlers.rs"
+```
 
-use crate::{
-    almacen::AlmacenUrls,
-    error::ErrorApp,
-    estado::EstadoApp,
-    models::{CodigoCorto, EntradaUrl, EstadisticasUrl, RespuestaAcortar, SolicitudAcortar},
-};
+### `src/lib.rs` — los módulos, accesibles para los tests
 
-pub async fn chequeo_salud() -> &'static str { "OK" }
+Los tests de integración de `tests/` son crates aparte: solo pueden usar lo que el
+proyecto exporta como **librería**. Por eso los módulos se declaran en `lib.rs` (con
+`[lib] name = "url_shortener"` en `Cargo.toml`) y `main.rs` los importa desde ahí:
 
-pub async fn acortar_url<S: AlmacenUrls>(
-    State(estado): State<Arc<EstadoApp<S>>>,
-    Json(cuerpo): Json<SolicitudAcortar>,
-) -> Result<(StatusCode, Json<RespuestaAcortar>), ErrorApp> {
-    if !cuerpo.url.starts_with("http://") && !cuerpo.url.starts_with("https://") {
-        return Err(ErrorApp::UrlInvalida("debe empezar con http:// o https://".into()));
-    }
-
-    let expira_en = cuerpo.expira_en_segundos
-        .map(|s| Utc::now() + Duration::seconds(s as i64));
-
-    let mut entrada = EntradaUrl::nueva(cuerpo.url);
-    entrada.expira_en = expira_en;
-
-    let codigo = entrada.codigo.clone();
-    estado.almacen.guardar(entrada).await.map_err(|_| ErrorApp::Almacenamiento)?;
-
-    let url_corta = format!("{}/{}", estado.base_url, codigo);
-    let expira_ts = expira_en.map(|dt| dt.timestamp());
-
-    Ok((StatusCode::CREATED, Json(RespuestaAcortar { codigo, url_corta, expira_en: expira_ts })))
-}
-
-pub async fn redirigir<S: AlmacenUrls>(
-    State(estado): State<Arc<EstadoApp<S>>>,
-    Path(codigo_str): Path<String>,
-) -> Result<Redirect, ErrorApp> {
-    let codigo = CodigoCorto(codigo_str);
-    let entrada = estado.almacen.buscar(&codigo).await.ok_or(ErrorApp::NoEncontrado)?;
-
-    // Verificar expiración
-    if let Some(exp) = entrada.expira_en {
-        if Utc::now() > exp {
-            return Err(ErrorApp::NoEncontrado);
-        }
-    }
-
-    let almacen = estado.almacen.clone();
-    let cod     = codigo.clone();
-    tokio::spawn(async move { almacen.incrementar_clics(&cod).await; });
-
-    Ok(Redirect::permanent(&entrada.url_orig))
-}
-
-pub async fn estadisticas<S: AlmacenUrls>(
-    State(estado): State<Arc<EstadoApp<S>>>,
-    Path(codigo_str): Path<String>,
-) -> Result<Json<EstadisticasUrl>, ErrorApp> {
-    let codigo  = CodigoCorto(codigo_str);
-    let entrada = estado.almacen.buscar(&codigo).await.ok_or(ErrorApp::NoEncontrado)?;
-    Ok(Json(entrada.into()))
-}
-
-pub async fn listar_urls<S: AlmacenUrls>(
-    State(estado): State<Arc<EstadoApp<S>>>,
-) -> Json<Vec<EstadisticasUrl>> {
-    let lista = estado.almacen.listar_todo().await
-        .into_iter().map(EstadisticasUrl::from).collect();
-    Json(lista)
-}
+```rust
+--8<-- "src/chapter_03/url_shortener_v2/src/lib.rs"
 ```
 
 ### `src/main.rs` — conectando todo
 
 ```rust
-mod almacen;
-mod error;
-mod estado;
-mod handlers;
-mod models;
-
-use almacen::AlmacenPostgres;
-use estado::EstadoApp;
-use handlers::*;
-
-use axum::{
-    middleware::{self, Next},
-    extract::Request,
-    response::Response,
-    routing::{get, post},
-    Router,
-};
-use std::time::Instant;
-use tower_http::cors::CorsLayer;
-use tracing_subscriber::EnvFilter;
-
-async fn telemetria(req: Request, next: Next) -> Response {
-    let inicio = Instant::now();
-    let metodo = req.method().clone();
-    let uri    = req.uri().path().to_owned();
-    let resp   = next.run(req).await;
-    tracing::info!(
-        metodo = %metodo, ruta = %uri,
-        estado = resp.status().as_u16(),
-        ms     = inicio.elapsed().as_millis(), "petición"
-    );
-    resp
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL debe estar definida");
-    let base_url = std::env::var("BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:3000".into());
-
-    // Crear pool y aplicar migraciones
-    let pool = sqlx::PgPool::connect(&database_url).await?;
-    sqlx::migrate!("./migrations").run(&pool).await?;
-
-    let almacen = AlmacenPostgres::nuevo(pool.clone());
-    let estado  = EstadoApp::nuevo(almacen, base_url);
-
-    let app = Router::new()
-        .route("/health",        get(chequeo_salud::<AlmacenPostgres>))
-        .route("/shorten",       post(acortar_url::<AlmacenPostgres>))
-        .route("/urls",          get(listar_urls::<AlmacenPostgres>))
-        .route("/{codigo}",       get(redirigir::<AlmacenPostgres>))
-        .route("/{codigo}/stats", get(estadisticas::<AlmacenPostgres>))
-        .layer(middleware::from_fn(telemetria))
-        .layer(CorsLayer::permissive())
-        .with_state(estado);
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    tracing::info!("servidor en {}", listener.local_addr()?);
-    axum::serve(listener, app).await?;
-    Ok(())
-}
+--8<-- "src/chapter_03/url_shortener_v2/src/main.rs"
 ```
 
 ---
@@ -1119,93 +811,7 @@ entre tests.
 ### `tests/api_test.rs`
 
 ```rust
-use testcontainers::{runners::AsyncRunner, ImageExt};
-use testcontainers_modules::postgres::Postgres;
-use sqlx::PgPool;
-
-// Fixture: crea un PgPool apuntando a un PG efímero
-async fn pool_para_test() -> (PgPool, impl Drop) {
-    let contenedor = Postgres::default()
-        .with_tag("16-alpine")
-        .start()
-        .await
-        .expect("Docker disponible");
-
-    let puerto = contenedor.get_host_port_ipv4(5432).await.unwrap();
-    let url    = format!(
-        "postgres://postgres:postgres@127.0.0.1:{}/postgres",
-        puerto
-    );
-
-    let pool = PgPool::connect(&url).await.unwrap();
-    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-
-    (pool, contenedor)   // contenedor vive mientras el test corre
-}
-
-#[tokio::test]
-async fn ciclo_completo_crear_y_buscar() {
-    let (pool, _contenedor) = pool_para_test().await;
-
-    // Importar nuestros tipos de producción
-    use url_shortener::almacen::{AlmacenPostgres, AlmacenUrls};
-    use url_shortener::models::EntradaUrl;
-
-    let almacen = AlmacenPostgres::nuevo(pool);
-
-    let entrada  = EntradaUrl::nueva("https://www.rust-lang.org".into());
-    let codigo   = entrada.codigo.clone();
-
-    // Guardar
-    almacen.guardar(entrada).await.expect("guardar falló");
-
-    // Buscar
-    let encontrada = almacen.buscar(&codigo).await.expect("no encontrada");
-    assert_eq!(encontrada.url_orig, "https://www.rust-lang.org");
-    assert_eq!(encontrada.clics, 0);
-}
-
-#[tokio::test]
-async fn incrementar_clics_atomico() {
-    let (pool, _contenedor) = pool_para_test().await;
-
-    use url_shortener::almacen::{AlmacenPostgres, AlmacenUrls};
-    use url_shortener::models::EntradaUrl;
-
-    let almacen = AlmacenPostgres::nuevo(pool);
-    let entrada  = EntradaUrl::nueva("https://example.com".into());
-    let codigo   = entrada.codigo.clone();
-    almacen.guardar(entrada).await.unwrap();
-
-    // Incrementos concurrentes
-    let a = almacen.clone();
-    let b = almacen.clone();
-    let c = almacen.clone();
-    let cod_a = codigo.clone();
-    let cod_b = codigo.clone();
-    let cod_c = codigo.clone();
-
-    tokio::join!(
-        async move { a.incrementar_clics(&cod_a).await },
-        async move { b.incrementar_clics(&cod_b).await },
-        async move { c.incrementar_clics(&cod_c).await },
-    );
-
-    let stats = almacen.buscar(&codigo).await.unwrap();
-    assert_eq!(stats.clics, 3);   // UPDATE atómico de PG garantiza 3
-}
-
-#[tokio::test]
-async fn url_inexistente_devuelve_none() {
-    let (pool, _contenedor) = pool_para_test().await;
-
-    use url_shortener::almacen::{AlmacenPostgres, AlmacenUrls};
-    use url_shortener::models::CodigoCorto;
-
-    let almacen = AlmacenPostgres::nuevo(pool);
-    let result  = almacen.buscar(&CodigoCorto("NOEXISTE".into())).await;
-    assert!(result.is_none());
-}
+--8<-- "src/chapter_03/url_shortener_v2/tests/api_test.rs"
 ```
 
 Ejecutar los tests:
@@ -1218,29 +824,22 @@ cargo test --test api_test -- --test-threads=4
 ### `sqlx::test`: alternativa sin Docker
 
 Para tests de capa de datos sin levantar contenedores, SQLx provee la macro
-`#[sqlx::test]`. Crea una base de datos temporal, aplica migraciones, ejecuta el test
-en una transacción y hace rollback automático:
+`#[sqlx::test]`. Por cada test **crea una base de datos nueva** en tu PostgreSQL, le
+aplica las migraciones y la elimina al terminar, así los tests no comparten estado
+(`tests/sqlx_test.rs`):
 
 ```rust
-#[sqlx::test(migrations = "./migrations")]
-async fn test_con_sqlx_test(pool: PgPool) {
-    use url_shortener::almacen::{AlmacenPostgres, AlmacenUrls};
-    use url_shortener::models::EntradaUrl;
-
-    let almacen = AlmacenPostgres::nuevo(pool);
-    let entrada  = EntradaUrl::nueva("https://ferris.rs".into());
-    let codigo   = entrada.codigo.clone();
-
-    almacen.guardar(entrada).await.unwrap();
-
-    let encontrada = almacen.buscar(&codigo).await.unwrap();
-    assert_eq!(encontrada.url_orig, "https://ferris.rs");
-    // Al salir, la transacción hace rollback → BD limpia para el siguiente test
-}
+--8<-- "src/chapter_03/url_shortener_v2/tests/sqlx_test.rs"
 ```
 
-**Requires**: `DATABASE_URL` en el entorno (o en `.env`). Es más rápido que
-testcontainers (no levanta Docker) pero necesita una BD PostgreSQL disponible.
+**Requiere** `DATABASE_URL` al ejecutar los tests (no al compilar, si usas el caché
+`.sqlx/`). Es más rápido que testcontainers porque no levanta un contenedor por test,
+pero necesita un PostgreSQL disponible:
+
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres \
+    cargo test --test sqlx_test -- --ignored
+```
 
 ---
 

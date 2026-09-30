@@ -15,6 +15,10 @@ jobs:
   rust:
     name: Ejemplos (Rust ${{ matrix.toolchain }})
     runs-on: ubuntu-latest
+    env:
+      # Las macros query! usan el caché .sqlx/ versionado; no hace falta BD para compilar.
+      # Los tests de integración levantan su propio PostgreSQL con testcontainers (Docker).
+      SQLX_OFFLINE: "true"
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +34,25 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
+  # Mandelbrot del Mes 4 compilado a WebAssembly: clippy para wasm32 y los tests
+  # #[wasm_bindgen_test] ejecutados en Node (los que no necesitan el DOM).
+  wasm:
+    name: WebAssembly (Mes 4)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - run: cargo clippy -p mandelbrot-wasm --target wasm32-unknown-unknown -- -D warnings
+      - run: wasm-pack test --node
+        working-directory: src/chapter_04/mandelbrot_wasm
+
   # Cada ```rust de docs/ se compila con rustc; falla solo con errores NUEVOS
   # (los conocidos están en scripts/doc_blocks_baseline.json).
   doc-blocks:
@@ -39,14 +62,31 @@ jobs:
       fail-fast: false
       matrix:
         toolchain: ["1.85", stable]
+    # PostgreSQL para validar el SQL de los ejemplos con sqlx::query! (Mes 3).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2   # scripts/doc_deps compila tokio, axum, sqlx...
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Aplicar las migraciones del Mes 3
+        run: |
+          for f in src/chapter_03/url_shortener_v2/migrations/*.sql; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
       - run: python3 scripts/check_doc_blocks.py --verbose
 
   python:

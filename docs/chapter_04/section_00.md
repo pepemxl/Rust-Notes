@@ -286,15 +286,23 @@ impl Drop for CryptoBox {
 *   **`#[wasm_bindgen(getter, setter)]`**: Props en structs exportados.
 *   **Paralelismo**: **`wasm-bindgen-rayon`** (usa Web Workers). Requiere `SharedArrayBuffer` -> Headers `COOP`/`COEP` en servidor HTTP.
     ```rust
-    // Cargo.toml: rayon = "1.10", wasm-bindgen-rayon = "1.0"
+    // Cargo.toml: rayon = "1", wasm-bindgen-rayon = "1"
+    // En lib.rs: pub use wasm_bindgen_rayon::init_thread_pool;
+    // (JS llama a `await initThreadPool(navigator.hardwareConcurrency)` una vez)
     use rayon::prelude::*;
-    
+    use wasm_bindgen::prelude::*;
+
     #[wasm_bindgen]
-    pub fn render_mandelbrot(width: u32, height: u32, ...) -> Vec<u8> {
-        (0..height).into_par_iter() // ¡Paralelo en Wasm!
-            .workers!
-            .flat_map(|y| { ... }) 
-            .collect()
+    pub fn render_mandelbrot(width: u32, height: u32, max_iter: u32) -> Vec<u8> {
+        (0..height)
+            .into_par_iter() // cada fila va a un Web Worker del pool
+            .flat_map_iter(|y| (0..width).flat_map(move |x| color_pixel(x, y, max_iter)))
+            .collect() // RGBA contiguo, listo para ImageData
+    }
+
+    fn color_pixel(x: u32, y: u32, max_iter: u32) -> [u8; 4] {
+        let v = ((x ^ y) % max_iter.max(1)) as u8; // aquí va el cálculo de Mandelbrot
+        [v, v, v, 255]
     }
     ```
 
@@ -376,16 +384,16 @@ pub fn App() -> impl IntoView {
 ### 🎯 Conceptos Clave
 
 #### 1. `nom` (Parser Combinators — Streaming, Zero-Copy)
-*   **Filosofía:** Funciones `I -> IResult<I, O, E>`. Composición: `alt`, `tuple`, `many0`, `map`, `flat_map`.
-*   **Streaming:** `complete` vs `streaming` (incomplete data). `nom::error::VerboseError` para debug.
+*   **Filosofía:** Funciones `I -> IResult<I, O, E>`. Composición: `alt`, tuplas de parsers `(a, b)`, `many0`, `map`, `flat_map`. En `nom` 8 los combinadores se ejecutan con `.parse(input)` (trait `Parser`).
+*   **Streaming:** `complete` vs `streaming` (incomplete data). `nom_language::error::VerboseError` para debug (en `nom` 8 vive en la crate `nom-language`).
 *   **Zero-Copy:** Devuelve `&[u8]` / `&str` slices del input original.
 ```rust
-use nom::{bytes::complete::{tag, take_while1}, character::complete::{digit1, space0}, combinator::map_res, sequence::delimited, IResult};
+use nom::{bytes::complete::{tag, take_while1}, character::complete::{digit1, space0}, combinator::map_res, sequence::delimited, IResult, Parser};
 
 fn parse_number(input: &str) -> IResult<&str, u64> {
-    map_res(delimited(space0, digit1, space0), |s: &str| s.parse::<u64>())(input)
+    map_res(delimited(space0, digit1, space0), |s: &str| s.parse::<u64>()).parse(input)
 }
-// Composición: tuple((parse_number, parse_number)) -> (u64, u64)
+// Composición: (parse_number, parse_number) -> (u64, u64)  (una tupla de parsers es un parser)
 ```
 
 #### 2. `pest` (PEG — Grammar en archivo separado)
@@ -421,7 +429,8 @@ fn parse_number(input: &str) -> IResult<&str, u64> {
 
 #### Implementación Núcleo (`src/parser/nginx.rs` con `nom`)
 ```rust
-use nom::{branch::alt, bytes::complete::{tag, take_until, take_while1}, character::complete::{digit1, char}, combinator::{map_res, opt}, sequence::{tuple, preceded, terminated}, IResult};
+use nom::{branch::alt, bytes::complete::{tag, take_until}, character::complete::digit1, combinator::map_res, sequence::delimited, IResult, Parser};
+use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct NginxLog {
@@ -430,20 +439,26 @@ pub struct NginxLog {
 }
 
 pub fn parse_nginx(input: &str) -> IResult<&str, NginxLog> {
-    let (input, ip) = take_until(" ")(input)?; // IP
-    let (input, _) = tag(" - ")(input)?; // ident + auth
-    let (input, time) = delimited(tag("["), take_until("]"), tag("] "))(input)?;
-    let (input, request) = delimited(tag("\""), take_until("\""), tag("\" "))(input)?;
-    let (input, status) = map_res(digit1, |s: &str| s.parse::<u16>())(input)?;
-    let (input, _) = tag(" ")(input)?;
-    let (input, body_bytes) = map_res(alt((tag("-"), digit1)), |s| if s=="-" { Ok(0) } else { s.parse() })(input)?;
-    let (input, _) = tag(" ")(input)?;
-    let (input, referer) = delimited(tag("\""), take_until("\""), tag("\" "))(input)?;
-    let (input, ua) = take_until("\n")(input)?;
+    let (input, ip) = take_until(" ").parse(input)?; // IP
+    let (input, _) = tag(" - ").parse(input)?; // ident + auth
+    let (input, time) = delimited(tag("["), take_until("]"), tag("] ")).parse(input)?;
+    let (input, request) = delimited(tag("\""), take_until("\""), tag("\" ")).parse(input)?;
+    let (input, status) = map_res(digit1, |s: &str| s.parse::<u16>()).parse(input)?;
+    let (input, _) = tag(" ").parse(input)?;
+    let (input, body_bytes) = map_res(alt((tag("-"), digit1)), |s: &str| if s == "-" { Ok(0) } else { s.parse::<u64>() }).parse(input)?;
+    let (input, _) = tag(" ").parse(input)?;
+    let (input, referer) = delimited(tag("\""), take_until("\""), tag("\" ")).parse(input)?;
+    let (input, ua) = take_until("\n").parse(input)?;
     
     let (method, path) = parse_request(request).unwrap_or(("".into(), "".into()));
     
     Ok((input, NginxLog { ip: ip.into(), time: time.into(), method, path, status, body_bytes, referer: referer.into(), ua: ua.into() }))
+}
+
+/// "GET /ruta HTTP/1.1" → ("GET", "/ruta")
+fn parse_request(request: &str) -> Option<(String, String)> {
+    let mut partes = request.split(' ');
+    Some((partes.next()?.to_string(), partes.next()?.to_string()))
 }
 ```
 
@@ -483,7 +498,7 @@ fn bench_nginx_parsing(c: &mut Criterion) {
 | **Wasm** | `wasm-bindgen-rayon` no paraleliza / panica | Un solo hilo usado / "Thread spawn failed". | **Headers HTTP Obligatorios**: `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`. Servir con `vite`/`wasm-pack` plugin o config manual nginx/apache. `rayon::ThreadPoolBuilder` custom stack size. |
 | **Wasm** | Tamaño `.wasm` enorme ( > 1MB ) | Carga lenta, "Application too large". | `wasm-opt -Oz` (Binaryen). `lto = true`, `opt-level = "z"` (o `"s"`), `codegen-units = 1`, `strip = true` en `Cargo.toml` `[profile.release]`. `lol_alloc`. Evitar `std` grande (`panic = "abort"`). |
 | **Parsing (Nom)** | Backtracking exponencial / Stack Overflow | Parser cuelga en input malicioso/grande. | **Evita `alt` ambiguo** sin `peek`. Usa `complete` combinators (fallan rápido si input incompleto) vs `streaming`. `nom::branch::alt` ordena alternativas por especificidad. |
-| **Parsing (General)** | Manejo Errores Pobre | "Parse error at byte 4096" (inútil). | **`nom::error::VerboseError`** o **`pest`** (mejores errores). Añade contexto: `context("parse nginx line", parse_nginx)`. En CLI: muestra línea + columna + snippet. |
+| **Parsing (General)** | Manejo Errores Pobre | "Parse error at byte 4096" (inútil). | **`nom_language::error::VerboseError`** o **`pest`** (mejores errores). Añade contexto: `context("parse nginx line", parse_nginx)`. En CLI: muestra línea + columna + snippet. |
 
 ---
 
@@ -613,7 +628,7 @@ fn main() {
 
 !!! note "Idea clave"
 
-    Los resultados (`&str`) son **vistas dentro del input original** (zero-copy), exactamente la propiedad que hace a `nom` rápido. `nom` añade combinadores (`alt`, `tuple`, `many0`, `map_res`) sobre este mismo patrón `I -> IResult<I, O>`.
+    Los resultados (`&str`) son **vistas dentro del input original** (zero-copy), exactamente la propiedad que hace a `nom` rápido. `nom` añade combinadores (`alt`, tuplas de parsers, `many0`, `map_res`) sobre este mismo patrón `I -> IResult<I, O>`.
 
 ### 6️⃣ `clap` Derive: parseo de argumentos declarativo *(requiere `clap`)*
 

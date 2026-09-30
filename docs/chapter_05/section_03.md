@@ -674,7 +674,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-nom        = "7"
+nom        = "8"
 ahash      = "0.8"
 lasso      = { version = "0.6", features = ["multi-threaded"] }
 smallvec   = { version = "1", features = ["union"] }
@@ -703,7 +703,7 @@ use nom::{
     character::complete::{char, digit1, space1},
     combinator::{map_res, opt},
     sequence::{delimited, terminated},
-    IResult,
+    IResult, Parser,
 };
 use std::borrow::Cow;
 
@@ -729,15 +729,15 @@ pub struct EntradaDespues<'a> {
 }
 
 fn campo_ip(i: &str) -> IResult<&str, &str> {
-    take_while1(|c: char| c.is_ascii_digit() || c == '.' || c == ':')(i)
+    take_while1(|c: char| c.is_ascii_digit() || c == '.' || c == ':').parse(i)
 }
 
 fn campo_metodo(i: &str) -> IResult<&str, &str> {
-    take_while1(|c: char| c.is_ascii_uppercase())(i)
+    take_while1(|c: char| c.is_ascii_uppercase()).parse(i)
 }
 
 fn campo_ruta(i: &str) -> IResult<&str, Cow<str>> {
-    let (i, ruta) = take_while1(|c: char| c != ' ')(i)?;
+    let (i, ruta) = take_while1(|c: char| c != ' ').parse(i)?;
     // Solo decodificamos si hay caracteres codificados
     if ruta.contains('%') {
         Ok((i, Cow::Owned(decodificar_url(ruta))))
@@ -752,17 +752,17 @@ fn decodificar_url(s: &str) -> String {
 }
 
 pub fn parsear_linea_optimizado(input: &str) -> IResult<&str, EntradaDespues> {
-    let (i, ip)     = terminated(campo_ip, space1)(input)?;
-    let (i, _)      = terminated(take_while1(|c: char| c != ' '), space1)(i)?;
-    let (i, _)      = terminated(take_while1(|c: char| c != ' '), space1)(i)?;
-    let (i, _)      = terminated(delimited(char('['), take_until("]"), char(']')), space1)(i)?;
-    let (i, _)      = char('"')(i)?;
-    let (i, metodo) = terminated(campo_metodo, char(' '))(i)?;
-    let (i, ruta)   = terminated(campo_ruta, char(' '))(i)?;
-    let (i, _)      = take_until("\"")(i)?;
-    let (i, _)      = terminated(char('"'), space1)(i)?;
-    let (i, estado) = terminated(map_res(digit1, |s: &str| s.parse::<u16>()), space1)(i)?;
-    let (i, bytes)  = opt(map_res(digit1, |s: &str| s.parse::<u64>()))(i)?;
+    let (i, ip)     = terminated(campo_ip, space1).parse(input)?;
+    let (i, _)      = terminated(take_while1(|c: char| c != ' '), space1).parse(i)?;
+    let (i, _)      = terminated(take_while1(|c: char| c != ' '), space1).parse(i)?;
+    let (i, _)      = terminated(delimited(char('['), take_until("]"), char(']')), space1).parse(i)?;
+    let (i, _)      = char('"').parse(i)?;
+    let (i, metodo) = terminated(campo_metodo, char(' ')).parse(i)?;
+    let (i, ruta)   = terminated(campo_ruta, char(' ')).parse(i)?;
+    let (i, _)      = take_until("\"").parse(i)?;
+    let (i, _)      = terminated(char('"'), space1).parse(i)?;
+    let (i, estado) = terminated(map_res(digit1, |s: &str| s.parse::<u16>()), space1).parse(i)?;
+    let (i, bytes)  = opt(map_res(digit1, |s: &str| s.parse::<u64>())).parse(i)?;
 
     Ok((i, EntradaDespues { ip, metodo, ruta, estado, bytes }))
 }

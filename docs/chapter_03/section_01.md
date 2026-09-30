@@ -368,8 +368,9 @@ En el 99 % del código async solo necesitas saber:
 // Para fijar una future en el heap:
 let fut = Box::pin(mi_future_async());
 
-// Para fijar una future en el stack (macro de Tokio):
-tokio::pin!(mi_future_async());  // crea una variable local fijada
+// Para fijar una future en el stack (macro de Tokio): recibe una variable, no una expresión
+let fut = mi_future_async();
+tokio::pin!(fut);  // `fut` pasa a ser Pin<&mut ...> en el stack
 
 // El error más común y su solución:
 // error: the `poll` method requires the value to be stable in memory
@@ -387,8 +388,11 @@ tokio::pin!(mi_future_async());  // crea una variable local fijada
 async fn main() {
     println!("hola desde async");
 }
+```
 
-// Se expande aproximadamente a:
+Se expande aproximadamente a:
+
+```rust
 fn main() {
     tokio::runtime::Runtime::new()
         .unwrap()
@@ -551,7 +555,7 @@ thread impide que procese otras tareas:
 
 ```rust
 // ❌ MAL: bloquea el worker thread del runtime
-async fn hashear_contrasena(pass: String) -> String {
+async fn hashear_contrasena_mal(pass: String) -> String {
     bcrypt::hash(&pass, 12).unwrap()   // CPU-intensivo, bloquea segundos
 }
 
@@ -602,7 +606,7 @@ async fn tarea_con_rc() {
     println!("{rc}");
 }
 
-// Si hacemos spawn:
+// ❌ NO COMPILA si hacemos spawn:
 tokio::spawn(tarea_con_rc());
 // error: future cannot be sent between threads safely
 //        └── `Rc<i32>` cannot be shared between threads safely

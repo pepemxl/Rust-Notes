@@ -1,0 +1,78 @@
+# Dependencias disponibles para los bloques ```rust de docs/.
+# scripts/check_doc_blocks.py compila este crate una vez y pasa cada dependencia a
+# rustc con --extern, así los ejemplos que usan tokio, axum, serde... también se
+# verifican. Si un ejemplo necesita otra crate, agrégala aquí.
+[package]
+name = "doc_deps"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+# Async y web (Mes 3)
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+futures = "0.3"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["ws", "macros"] }
+tower = { version = "0.5", features = ["util", "timeout", "limit"] }
+tower-http = { version = "0.6", features = ["trace", "cors", "limit", "timeout", "request-id", "util"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Datos y serialización
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+dashmap = "6"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate", "chrono", "uuid", "json"] }
+# Errores
+thiserror = "2"
+anyhow = "1"
+# Observabilidad
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
+# Tests de integración
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }
+# CLI (Mes 4)
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+clap_complete = "4"
+clap_mangen = "0.2"
+owo-colors = "4"
+indicatif = "0.17"
+ratatui = "0.29"
+crossterm = "0.28"
+tabled = "0.17"
+blake3 = "1"
+sha2 = "0.10"
+hex = "0.4"
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+# FFI (Mes 4)
+libc = "0.2"
+cc = "1"
+bindgen = "0.72"
+# Wasm (Mes 4): compilan también para el host; aquí solo se verifican los tipos
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["console", "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "CanvasRenderingContext2d", "ImageData", "Performance"] }
+console_error_panic_hook = "0.1"
+# Parsing (Mes 4)
+nom = "8"
+nom-language = "0.1"   # VerboseError y convert_error (salieron de nom en la 8)
+pest = "2"
+pest_derive = "2"
+regex = "1"
+aho-corasick = "1"
+encoding_rs = "0.8"
+memchr = "2"
+rayon = "1"
+# Rendimiento
+criterion = { version = "0.5", features = ["html_reports"] }
+# Varios
+bcrypt = "0.16"
+rand = "0.9"

@@ -1,0 +1,26 @@
+[package]
+name    = "logparser"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+nom         = "8"
+regex       = "1"
+aho-corasick = "1"
+encoding_rs = "0.8"
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+clap        = { version = "4", features = ["derive"] }
+owo-colors  = "4"
+anyhow      = "1"
+thiserror   = "2"
+tabled      = "0.17"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name    = "parser"
+harness = false

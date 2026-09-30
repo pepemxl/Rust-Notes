@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE urls SET clicks = clicks + 1 WHERE code = $1 RETURNING clicks",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "clicks",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6445e15a2aba69aaaf8fe6c3d21b01a694b58a23402df3ee93c10e0f374838b1"
+}

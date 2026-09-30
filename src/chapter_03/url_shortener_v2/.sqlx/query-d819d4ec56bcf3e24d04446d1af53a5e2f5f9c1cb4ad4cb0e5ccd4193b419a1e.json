@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO urls (code, target_url, created_at, expires_at, clicks)\n            VALUES ($1, $2, $3, $4, 0)\n            ON CONFLICT (code) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d819d4ec56bcf3e24d04446d1af53a5e2f5f9c1cb4ad4cb0e5ccd4193b419a1e"
+}

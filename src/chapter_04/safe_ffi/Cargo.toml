@@ -1,0 +1,13 @@
+[package]
+name    = "safe_ffi"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+thiserror = "2"
+
+[build-dependencies]
+cc      = "1"
+# bindgen = "0.72"   # descomentar cuando uses headers C externos

@@ -331,440 +331,56 @@ cd mytool
 `Cargo.toml`:
 
 ```toml
-[package]
-name    = "mytool"
-version = "0.1.0"
-edition = "2024"
-
-[[bin]]
-name = "mytool"
-path = "src/main.rs"
-
-[dependencies]
-clap          = { version = "4", features = ["derive", "env", "wrap_help"] }
-clap_complete = "4"
-owo-colors    = "4"
-indicatif     = "0.17"
-blake3        = "1"
-sha2          = "0.10"
-hex           = "0.4"
-rand          = "0.8"
-anyhow        = "1"
-rayon         = "1"
-
-[dev-dependencies]
-assert_cmd = "2"
-predicates = "3"
-tempfile   = "3"
+--8<-- "src/chapter_04/mytool/Cargo.toml"
 ```
 
-### `src/main.rs`
+(`rust-version.workspace` y `publish` vienen del workspace de estas notas; en tu
+proyecto puedes omitirlos.)
+
+### `src/lib.rs` y `src/main.rs`
+
+Los módulos viven en una **librería** (`lib.rs`) y `main.rs` solo la usa. Así otros
+crates del workspace, como `xtask` más abajo, pueden importar `mytool::cli::Cli` para
+generar completions y man pages a partir de la misma definición de clap.
 
 ```rust
-mod cli;
-mod util;
+--8<-- "src/chapter_04/mytool/src/lib.rs"
+```
 
-use anyhow::Result;
-use clap::Parser;
-use cli::{Cli, Comandos};
-use tracing_subscriber::EnvFilter;
-
-fn main() -> Result<()> {
-    let cli = Cli::parse();
-
-    // Configurar nivel de log según -v/-vv/-vvv
-    let nivel = match cli.verbose {
-        0 => "warn",
-        1 => "info",
-        2 => "debug",
-        _ => "trace",
-    };
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(nivel))
-        .with_target(false)
-        .init();
-
-    match cli.command {
-        Comandos::Hash(args)    => cli::hash::ejecutar(args, cli.json),
-        Comandos::GenPass(args) => cli::genpass::ejecutar(args, cli.json),
-    }
-}
+```rust
+--8<-- "src/chapter_04/mytool/src/main.rs"
 ```
 
 ### `src/cli/mod.rs`
 
 ```rust
-pub mod genpass;
-pub mod hash;
-
-use clap::{Args, Parser, Subcommand, ValueEnum};
-use std::path::PathBuf;
-
-#[derive(Parser, Debug)]
-#[command(
-    name    = "mytool",
-    version,
-    about   = "Navaja suiza en Rust",
-    arg_required_else_help = true,
-)]
-pub struct Cli {
-    #[command(subcommand)]
-    pub command: Comandos,
-
-    /// Nivel de detalle: -v (info), -vv (debug), -vvv (trace)
-    #[arg(short, long, global = true, action = clap::ArgAction::Count)]
-    pub verbose: u8,
-
-    /// Salida en JSON estructurado
-    #[arg(long, global = true)]
-    pub json: bool,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum Comandos {
-    /// Calcula el hash criptográfico de archivos
-    Hash(HashArgs),
-    /// Genera contraseñas seguras y fáciles de recordar
-    GenPass(GenPassArgs),
-}
-
-#[derive(Args, Debug)]
-pub struct HashArgs {
-    /// Archivos a hashear
-    #[arg(value_name = "ARCHIVO", num_args = 1.., required = true)]
-    pub archivos: Vec<PathBuf>,
-
-    /// Algoritmo de hash
-    #[arg(short = 'a', long, value_enum, default_value_t = AlgoHash::Blake3, env = "MYTOOL_ALGO")]
-    pub algo: AlgoHash,
-
-    /// Verificar hashes contra un archivo de checksums
-    #[arg(short = 'c', long, value_name = "CHECKSUMS")]
-    pub verificar: Option<PathBuf>,
-
-    /// Solo el hash, sin nombre de archivo
-    #[arg(long)]
-    pub solo_hash: bool,
-}
-
-#[derive(Args, Debug)]
-pub struct GenPassArgs {
-    /// Longitud de la contraseña (8-128)
-    #[arg(short, long, default_value_t = 20,
-          value_parser = clap::value_parser!(u32).range(8..=128))]
-    pub longitud: u32,
-
-    /// Generar passphrase con palabras diceware (EFF wordlist)
-    #[arg(long)]
-    pub diceware: bool,
-
-    /// Número de palabras diceware
-    #[arg(long, default_value_t = 6, requires = "diceware")]
-    pub palabras: u32,
-
-    /// Cantidad de contraseñas a generar
-    #[arg(short = 'n', long, default_value_t = 1)]
-    pub cantidad: u32,
-
-    /// Excluir caracteres ambiguos (0/O, 1/l/I)
-    #[arg(long)]
-    pub sin_ambiguos: bool,
-}
-
-#[derive(ValueEnum, Clone, Debug, Default)]
-pub enum AlgoHash {
-    #[default]
-    Blake3,
-    Sha256,
-    Sha512,
-}
-
-impl std::fmt::Display for AlgoHash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AlgoHash::Blake3 => write!(f, "blake3"),
-            AlgoHash::Sha256 => write!(f, "sha256"),
-            AlgoHash::Sha512 => write!(f, "sha512"),
-        }
-    }
-}
+--8<-- "src/chapter_04/mytool/src/cli/mod.rs"
 ```
 
 ### `src/cli/hash.rs` — streaming con progreso
 
 ```rust
-use std::{
-    fs::File,
-    io::{self, BufReader, Read},
-    path::PathBuf,
-};
-
-use anyhow::{Context, Result};
-use indicatif::{MultiProgress, ProgressBar};
-use owo_colors::OwoColorize;
-use rayon::prelude::*;
-use serde::Serialize;
-
-use crate::{
-    cli::{AlgoHash, HashArgs},
-    util,
-};
-
-enum Hasher {
-    Blake3(blake3::Hasher),
-    Sha256(sha2::Sha256),
-    Sha512(sha2::Sha512),
-}
-
-impl Hasher {
-    fn nuevo(algo: &AlgoHash) -> Self {
-        match algo {
-            AlgoHash::Blake3 => Hasher::Blake3(blake3::Hasher::new()),
-            AlgoHash::Sha256 => {
-                use sha2::Digest;
-                Hasher::Sha256(sha2::Sha256::new())
-            }
-            AlgoHash::Sha512 => {
-                use sha2::Digest;
-                Hasher::Sha512(sha2::Sha512::new())
-            }
-        }
-    }
-
-    fn actualizar(&mut self, data: &[u8]) {
-        use sha2::Digest;
-        match self {
-            Hasher::Blake3(h) => { h.update(data); }
-            Hasher::Sha256(h) => h.update(data),
-            Hasher::Sha512(h) => h.update(data),
-        }
-    }
-
-    fn finalizar(self) -> String {
-        use sha2::Digest;
-        match self {
-            Hasher::Blake3(h) => h.finalize().to_hex().to_string(),
-            Hasher::Sha256(h) => hex::encode(h.finalize()),
-            Hasher::Sha512(h) => hex::encode(h.finalize()),
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct ResultadoHash {
-    archivo: String,
-    algo:    String,
-    hash:    String,
-    bytes:   u64,
-    ok:      bool,
-}
-
-pub fn ejecutar(args: HashArgs, json: bool) -> Result<()> {
-    let mp    = MultiProgress::new();
-    let algo  = args.algo.clone();
-
-    // Procesar en paralelo usando Rayon
-    let resultados: Vec<ResultadoHash> = args
-        .archivos
-        .par_iter()
-        .map(|ruta| hashear_archivo(ruta, &algo, &mp))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    // Mostrar resultados
-    for r in &resultados {
-        if json {
-            println!("{}", serde_json::to_string(r).unwrap());
-        } else if args.solo_hash {
-            println!("{}", r.hash);
-        } else {
-            let estado = if r.ok {
-                "✓".green().bold().to_string()
-            } else {
-                "✗".red().bold().to_string()
-            };
-            println!("{estado}  {}  {} ({})", r.hash, r.archivo, util::formato_bytes(r.bytes));
-        }
-    }
-
-    let errores = resultados.iter().filter(|r| !r.ok).count();
-    if errores > 0 {
-        eprintln!("{}", format!("{errores} archivo(s) fallaron").red());
-        std::process::exit(1);
-    }
-
-    Ok(())
-}
-
-fn hashear_archivo(
-    ruta: &PathBuf,
-    algo: &AlgoHash,
-    mp: &MultiProgress,
-) -> Result<ResultadoHash> {
-    let meta       = ruta.metadata()
-        .with_context(|| format!("no se pudo leer: {}", ruta.display()))?;
-    let total_bytes = meta.len();
-
-    let pb = mp.add(util::crear_barra(total_bytes, &ruta.display().to_string()));
-
-    let archivo    = File::open(ruta)
-        .with_context(|| format!("no se pudo abrir: {}", ruta.display()))?;
-    let mut reader = BufReader::with_capacity(256 * 1024, archivo); // 256 KB buffer
-    let mut hasher = Hasher::nuevo(algo);
-    let mut buf    = vec![0u8; 64 * 1024]; // 64 KB por iteración
-
-    let mut bytes_leidos = 0u64;
-    loop {
-        let n = reader.read(&mut buf)
-            .with_context(|| format!("error leyendo: {}", ruta.display()))?;
-        if n == 0 { break; }
-        hasher.actualizar(&buf[..n]);
-        bytes_leidos += n as u64;
-        pb.inc(n as u64);
-    }
-
-    let hash = hasher.finalizar();
-    pb.finish_and_clear();
-
-    Ok(ResultadoHash {
-        archivo: ruta.display().to_string(),
-        algo:    algo.to_string(),
-        hash,
-        bytes:   bytes_leidos,
-        ok:      true,
-    })
-}
+--8<-- "src/chapter_04/mytool/src/cli/hash.rs"
 ```
 
 ### `src/cli/genpass.rs` — generador de contraseñas
 
 ```rust
-use anyhow::Result;
-use owo_colors::OwoColorize;
-use rand::{Rng, SeedableRng};
-use rand::rngs::OsRng;
-use serde::Serialize;
-
-use crate::cli::GenPassArgs;
-
-const CHARS_LOWER: &[u8]    = b"abcdefghijkmnopqrstuvwxyz";  // sin l
-const CHARS_UPPER: &[u8]    = b"ABCDEFGHJKLMNPQRSTUVWXYZ";   // sin I, O
-const CHARS_DIGITS: &[u8]   = b"23456789";                    // sin 0, 1
-const CHARS_SIMBOLOS: &[u8] = b"!@#$%^&*-_=+";
-
-// Subconjunto de la EFF Long Wordlist (muestra; la lista real tiene 7776 palabras)
-const DICEWARE_PALABRAS: &[&str] = &[
-    "abaco", "bruma", "calma", "delta", "enero", "fauna", "globo",
-    "hongo", "intro", "justo", "karma", "limon", "marco", "novel",
-    "opera", "pluma", "queso", "radar", "salsa", "tango", "union",
-    "valor", "watts", "xerox", "yunta", "zafra", "atlas", "brisa",
-    "cielo", "drago",
-];
-
-#[derive(Serialize)]
-struct Contrasena {
-    valor:   String,
-    entropia: f64,
-    tipo:    String,
-}
-
-pub fn ejecutar(args: GenPassArgs, json: bool) -> Result<()> {
-    let mut rng = OsRng;  // fuente criptográfica del sistema operativo
-
-    for _ in 0..args.cantidad {
-        let resultado = if args.diceware {
-            generar_diceware(&mut rng, args.palabras)
-        } else {
-            generar_aleatoria(&mut rng, args.longitud, args.sin_ambiguos)
-        };
-
-        if json {
-            println!("{}", serde_json::to_string(&resultado).unwrap());
-        } else {
-            mostrar_contrasena(&resultado);
-        }
-    }
-
-    Ok(())
-}
-
-fn generar_aleatoria(
-    rng: &mut OsRng,
-    longitud: u32,
-    sin_ambiguos: bool,
-) -> Contrasena {
-    let chars_lower  = if sin_ambiguos { CHARS_LOWER }  else { b"abcdefghijklmnopqrstuvwxyz" };
-    let chars_upper  = if sin_ambiguos { CHARS_UPPER }  else { b"ABCDEFGHIJKLMNOPQRSTUVWXYZ" };
-    let chars_digits = if sin_ambiguos { CHARS_DIGITS } else { b"0123456789" };
-
-    let mut charset = Vec::new();
-    charset.extend_from_slice(chars_lower);
-    charset.extend_from_slice(chars_upper);
-    charset.extend_from_slice(chars_digits);
-    charset.extend_from_slice(CHARS_SIMBOLOS);
-
-    let pass: String = (0..longitud)
-        .map(|_| charset[rng.gen_range(0..charset.len())] as char)
-        .collect();
-
-    let entropia = (longitud as f64) * (charset.len() as f64).log2();
-
-    Contrasena { valor: pass, entropia, tipo: "aleatoria".into() }
-}
-
-fn generar_diceware(rng: &mut OsRng, num_palabras: u32) -> Contrasena {
-    let palabras: Vec<&str> = (0..num_palabras)
-        .map(|_| DICEWARE_PALABRAS[rng.gen_range(0..DICEWARE_PALABRAS.len())])
-        .collect();
-
-    let pass     = palabras.join("-");
-    let entropia = (num_palabras as f64) * (DICEWARE_PALABRAS.len() as f64).log2();
-
-    Contrasena { valor: pass, entropia, tipo: "diceware".into() }
-}
-
-fn mostrar_contrasena(c: &Contrasena) {
-    println!(
-        "{}  ({} bits de entropía, {})",
-        c.valor.green().bold(),
-        format!("{:.1}", c.entropia).yellow(),
-        c.tipo.dimmed()
-    );
-}
+--8<-- "src/chapter_04/mytool/src/cli/genpass.rs"
 ```
+
+!!! warning "La lista de palabras es una muestra"
+
+    Con 30 palabras, cada palabra aporta solo log2(30) ≈ 4,9 bits: una passphrase de 6
+    palabras tiene ~29 bits, demasiado poco. Con la
+    [EFF Long Wordlist](https://www.eff.org/dice) completa (7776 palabras) cada palabra
+    aporta 12,9 bits y 6 palabras dan ~77 bits. En un proyecto real, incluye la lista
+    completa con `include_str!("eff_large_wordlist.txt")`.
 
 ### `src/util.rs`
 
 ```rust
-use indicatif::{ProgressBar, ProgressStyle};
-use owo_colors::OwoColorize;
-use std::time::Duration;
-
-pub fn crear_barra(total_bytes: u64, nombre: &str) -> ProgressBar {
-    let pb = ProgressBar::new(total_bytes);
-    pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] \
-             {bytes}/{total_bytes} ({bytes_per_sec}) {msg}"
-        )
-        .unwrap()
-        .progress_chars("█▉▊▋▌▍▎▏  "),
-    );
-    pb.set_message(nombre.to_string());
-    pb.enable_steady_tick(Duration::from_millis(100));
-    pb
-}
-
-pub fn formato_bytes(bytes: u64) -> String {
-    const U: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-    let mut v = bytes as f64;
-    let mut i = 0;
-    while v >= 1024.0 && i < U.len() - 1 { v /= 1024.0; i += 1; }
-    if i == 0 { format!("{} {}", bytes, U[0]) } else { format!("{:.1} {}", v, U[i]) }
-}
-
-pub fn ok(msg: &str)  { println!("{} {}", "✓".green().bold(), msg); }
-pub fn err(msg: &str) { eprintln!("{} {}", "✗".red().bold(),  msg); }
-pub fn info(msg: &str){ println!("{} {}", "→".cyan(), msg); }
+--8<-- "src/chapter_04/mytool/src/util.rs"
 ```
 
 ---
@@ -779,86 +395,29 @@ el patrón `xtask`: un crate binario dentro del workspace que actúa como task r
 ```toml
 [workspace]
 members = [".", "xtask"]
-resolver = "2"
+resolver = "3"
 ```
 
 ### `xtask/Cargo.toml`
 
 ```toml
-[package]
-name    = "xtask"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-clap_complete = "4"
-clap_mangen  = "0.2"
+--8<-- "src/chapter_04/xtask/Cargo.toml"
 ```
 
 ### `xtask/src/main.rs`
 
 ```rust
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-};
+--8<-- "src/chapter_04/xtask/src/main.rs"
+```
 
-fn main() {
-    let tarea = env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Uso: cargo xtask <tarea>");
-        eprintln!("Tareas: completions, manpage, dist");
-        std::process::exit(1);
-    });
+### `.cargo/config.toml`
 
-    match tarea.as_str() {
-        "completions" => generar_completions(),
-        "manpage"     => generar_manpage(),
-        "dist"        => {
-            generar_completions();
-            generar_manpage();
-            println!("✓ artefactos generados en dist/");
-        }
-        t => {
-            eprintln!("tarea desconocida: {t}");
-            std::process::exit(1);
-        }
-    }
-}
+`cargo xtask` no es un comando de Cargo: es un **alias** que se define en la raíz del
+workspace. Sin él, el equivalente es `cargo run -p xtask -- dist`.
 
-fn directorio_dist() -> PathBuf {
-    let raiz = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()  // workspace root
-        .unwrap()
-        .to_path_buf();
-    let dist = raiz.join("dist");
-    fs::create_dir_all(&dist).unwrap();
-    dist
-}
-
-fn generar_completions() {
-    use clap::CommandFactory;
-    use clap_complete::{generate_to, Shell};
-    // Importamos Cli desde el crate principal
-    // En una workspace real: use mytool::Cli;
-    // Aquí lo dejamos como referencia de la estructura
-
-    let dist = directorio_dist();
-    let shells = [Shell::Bash, Shell::Zsh, Shell::Fish, Shell::PowerShell];
-
-    for shell in shells {
-        // generate_to(shell, &mut Cli::command(), "mytool", &dist).unwrap();
-        println!("  → {shell:?} completions generadas en {}", dist.display());
-    }
-    println!("✓ completions listas");
-}
-
-fn generar_manpage() {
-    // use clap::CommandFactory;
-    // use clap_mangen::Man;
-    let dist = directorio_dist();
-    // Man::new(Cli::command()).render(&mut fs::File::create(dist.join("mytool.1")).unwrap()).unwrap();
-    println!("✓ man page generada en {}", dist.join("mytool.1").display());
-}
+```toml
+[alias]
+xtask = "run --package xtask --"
 ```
 
 Uso:
@@ -1018,109 +577,7 @@ PANTALLA DE RATATUI (80×24)
 y código de salida:
 
 ```rust
-// tests/cli_test.rs
-use assert_cmd::Command;
-use predicates::prelude::*;
-use tempfile::NamedTempFile;
-use std::io::Write;
-
-fn cmd() -> Command {
-    Command::cargo_bin("mytool").unwrap()
-}
-
-#[test]
-fn sin_argumentos_muestra_ayuda() {
-    cmd()
-        .assert()
-        .failure()   // arg_required_else_help = true → exit code 2
-        .stderr(predicate::str::contains("Uso"));
-}
-
-#[test]
-fn hash_blake3_archivo_conocido() {
-    let mut f = NamedTempFile::new().unwrap();
-    f.write_all(b"hello world\n").unwrap();
-    let ruta = f.path().to_str().unwrap();
-
-    cmd()
-        .args(["hash", ruta])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("blake3").not())  // solo_hash = false
-        .stdout(predicate::str::is_match(r"[0-9a-f]{64}").unwrap()); // hex 64 chars
-}
-
-#[test]
-fn hash_salida_json() {
-    let mut f = NamedTempFile::new().unwrap();
-    f.write_all(b"test").unwrap();
-    let ruta = f.path().to_str().unwrap();
-
-    let salida = cmd()
-        .args(["--json", "hash", ruta])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let json: serde_json::Value = serde_json::from_slice(&salida).unwrap();
-    assert_eq!(json["algo"], "blake3");
-    assert!(json["hash"].as_str().unwrap().len() == 64);
-}
-
-#[test]
-fn hash_archivo_inexistente_falla_con_mensaje() {
-    cmd()
-        .args(["hash", "/no/existe/archivo.txt"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("no se pudo"));
-}
-
-#[test]
-fn genpass_longitud_valida() {
-    cmd()
-        .args(["genpass", "--longitud", "32"])
-        .assert()
-        .success()
-        .stdout(predicate::function(|output: &[u8]| {
-            let s = std::str::from_utf8(output).unwrap();
-            // La contraseña debe tener 32 caracteres antes del espacio
-            s.split_whitespace().next().map(|p| p.len() == 32).unwrap_or(false)
-        }));
-}
-
-#[test]
-fn genpass_longitud_invalida_rechazada() {
-    cmd()
-        .args(["genpass", "--longitud", "3"])   // menor que 8
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("8"));  // mensaje menciona el mínimo
-}
-
-#[test]
-fn genpass_diceware_produce_palabras_separadas_por_guion() {
-    cmd()
-        .args(["genpass", "--diceware", "--palabras", "4"])
-        .assert()
-        .success()
-        .stdout(predicate::function(|output: &[u8]| {
-            let s = std::str::from_utf8(output).unwrap();
-            let passphrase = s.split_whitespace().next().unwrap_or("");
-            passphrase.matches('-').count() == 3  // 4 palabras → 3 guiones
-        }));
-}
-
-#[test]
-fn version_flag() {
-    cmd()
-        .arg("--version")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
-}
+--8<-- "src/chapter_04/mytool/tests/cli_test.rs"
 ```
 
 Ejecutar los tests:

@@ -477,29 +477,37 @@ Para middleware más complejos (con estado, o que necesitan el estado de la app)
 `middleware::from_fn_with_state`:
 
 ```rust
-use axum::middleware::from_fn_with_state;
+use axum::{
+    Router,
+    extract::{Request, State},
+    http::StatusCode,
+    middleware::{Next, from_fn_with_state},
+    response::{IntoResponse, Response},
+};
 use std::sync::Arc;
 
+struct ConfigSeguridad {
+    api_key: String,
+}
+
 async fn verificar_clave(
-    State(cfg): State<Arc<Configuracion>>,
+    State(cfg): State<Arc<ConfigSeguridad>>,
     req: Request,
     next: Next,
 ) -> Response {
-    if req.headers()
-          .get("x-api-key")
-          .and_then(|v| v.to_str().ok()) == Some(cfg.base_url.as_str()) {
+    let clave = req.headers().get("x-api-key").and_then(|v| v.to_str().ok());
+    if clave == Some(cfg.api_key.as_str()) {
         next.run(req).await
     } else {
-        axum::http::Response::builder()
-            .status(401)
-            .body(axum::body::Body::empty())
-            .unwrap()
+        StatusCode::UNAUTHORIZED.into_response()
     }
 }
 
-// Router::new()
-//     .route_layer(from_fn_with_state(estado.clone(), verificar_clave))
-//     .with_state(estado)
+// route_layer: el middleware solo se aplica a las rutas ya registradas en `rutas`
+// (una ruta inexistente sigue dando 404, no 401).
+fn proteger(rutas: Router, cfg: Arc<ConfigSeguridad>) -> Router {
+    rutas.route_layer(from_fn_with_state(cfg, verificar_clave))
+}
 ```
 
 ### `IntoResponse`: convertir cualquier tipo en respuesta HTTP
@@ -567,7 +575,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum        = "0.7"
+axum        = "0.8"
 tokio       = { version = "1", features = ["full"] }
 serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
@@ -579,139 +587,19 @@ uuid        = { version = "1", features = ["v4"] }
 thiserror   = "2"
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 ```
 
 ### `src/models.rs`
 
 ```rust
-use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
-
-/// Identificador corto de una URL (8 caracteres alfanuméricos)
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct CodigoCorto(pub String);
-
-impl CodigoCorto {
-    pub fn generar() -> Self {
-        use std::fmt::Write;
-        let id = uuid::Uuid::new_v4();
-        let mut s = String::with_capacity(8);
-        // Toma los primeros 6 bytes del UUID y los codifica en base62
-        for byte in &id.as_bytes()[..6] {
-            let c = match byte % 62 {
-                n @ 0..=9   => b'0' + n,
-                n @ 10..=35 => b'a' + n - 10,
-                n           => b'A' + n - 36,
-            };
-            s.push(c as char);
-        }
-        // Añade 2 caracteres extra del timestamp para reducir colisiones
-        let ts = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .subsec_nanos();
-        let _ = write!(s, "{:02}", ts % 62);
-        CodigoCorto(s)
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for CodigoCorto {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-/// Registro de una URL acortada
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EntradaUrl {
-    pub codigo:    CodigoCorto,
-    pub url_orig:  String,
-    pub creada_en: u64,   // Unix timestamp en segundos
-    pub clics:     u64,
-}
-
-impl EntradaUrl {
-    pub fn nueva(url_orig: String) -> Self {
-        let creada_en = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
-        Self {
-            codigo: CodigoCorto::generar(),
-            url_orig,
-            creada_en,
-            clics: 0,
-        }
-    }
-}
-
-/// Cuerpo de la petición POST /shorten
-#[derive(Debug, Deserialize)]
-pub struct SolicitudAcortar {
-    pub url: String,
-}
-
-/// Cuerpo de la respuesta al acortar
-#[derive(Debug, Serialize)]
-pub struct RespuestaAcortar {
-    pub codigo:    CodigoCorto,
-    pub url_corta: String,
-}
-
-/// Estadísticas de una URL
-#[derive(Debug, Serialize)]
-pub struct EstadisticasUrl {
-    pub codigo:    CodigoCorto,
-    pub url_orig:  String,
-    pub creada_en: u64,
-    pub clics:     u64,
-}
-
-impl From<EntradaUrl> for EstadisticasUrl {
-    fn from(e: EntradaUrl) -> Self {
-        Self {
-            codigo:    e.codigo,
-            url_orig:  e.url_orig,
-            creada_en: e.creada_en,
-            clics:     e.clics,
-        }
-    }
-}
+--8<-- "src/chapter_03/url_shortener_v1/src/models.rs"
 ```
 
 ### `src/error.rs`
 
 ```rust
-use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
-use serde_json::json;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum ErrorApp {
-    #[error("URL no encontrada")]
-    NoEncontrado,
-    #[error("URL inválida: {0}")]
-    UrlInvalida(String),
-    #[error("error de almacenamiento")]
-    Almacenamiento,
-}
-
-impl IntoResponse for ErrorApp {
-    fn into_response(self) -> Response {
-        let (estado, msg) = match &self {
-            ErrorApp::NoEncontrado    => (StatusCode::NOT_FOUND,   self.to_string()),
-            ErrorApp::UrlInvalida(_)  => (StatusCode::BAD_REQUEST, self.to_string()),
-            ErrorApp::Almacenamiento  => (StatusCode::INTERNAL_SERVER_ERROR, "error interno".into()),
-        };
-        (estado, Json(json!({ "error": msg }))).into_response()
-    }
-}
+--8<-- "src/chapter_03/url_shortener_v1/src/error.rs"
 ```
 
 ### `src/almacen.rs`
@@ -719,243 +607,25 @@ impl IntoResponse for ErrorApp {
 Usamos `DashMap` — un `HashMap` concurrente sin necesidad de `Mutex`:
 
 ```rust
-use dashmap::DashMap;
-use std::sync::Arc;
-
-use crate::models::{CodigoCorto, EntradaUrl};
-use crate::error::ErrorApp;
-
-/// Trait de almacenamiento. Permite intercambiar implementaciones (en-memoria, PG...).
-pub trait AlmacenUrls: Send + Sync + 'static {
-    fn guardar(&self, entrada: EntradaUrl) -> Result<(), ErrorApp>;
-    fn buscar(&self, codigo: &CodigoCorto) -> Option<EntradaUrl>;
-    fn incrementar_clics(&self, codigo: &CodigoCorto) -> Option<u64>;
-    fn listar_todo(&self) -> Vec<EntradaUrl>;
-}
-
-/// Implementación en memoria con DashMap (sin Mutex, lock-striped)
-#[derive(Clone, Default)]
-pub struct AlmacenMemoria {
-    mapa: Arc<DashMap<String, EntradaUrl>>,
-}
-
-impl AlmacenMemoria {
-    pub fn nuevo() -> Self {
-        Self::default()
-    }
-}
-
-impl AlmacenUrls for AlmacenMemoria {
-    fn guardar(&self, entrada: EntradaUrl) -> Result<(), ErrorApp> {
-        self.mapa.insert(entrada.codigo.0.clone(), entrada);
-        Ok(())
-    }
-
-    fn buscar(&self, codigo: &CodigoCorto) -> Option<EntradaUrl> {
-        self.mapa.get(&codigo.0).map(|r| r.clone())
-    }
-
-    fn incrementar_clics(&self, codigo: &CodigoCorto) -> Option<u64> {
-        self.mapa.get_mut(&codigo.0).map(|mut r| {
-            r.clics += 1;
-            r.clics
-        })
-    }
-
-    fn listar_todo(&self) -> Vec<EntradaUrl> {
-        self.mapa.iter().map(|r| r.clone()).collect()
-    }
-}
+--8<-- "src/chapter_03/url_shortener_v1/src/almacen.rs"
 ```
 
 ### `src/estado.rs`
 
 ```rust
-use std::sync::Arc;
-use crate::almacen::AlmacenUrls;
-
-/// Estado compartido entre todos los handlers
-pub struct EstadoApp<S: AlmacenUrls> {
-    pub almacen:  Arc<S>,
-    pub base_url: String,
-}
-
-impl<S: AlmacenUrls> EstadoApp<S> {
-    pub fn nuevo(almacen: S, base_url: String) -> Arc<Self> {
-        Arc::new(Self {
-            almacen:  Arc::new(almacen),
-            base_url,
-        })
-    }
-}
+--8<-- "src/chapter_03/url_shortener_v1/src/estado.rs"
 ```
 
 ### `src/handlers.rs`
 
 ```rust
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::{IntoResponse, Redirect},
-    Json,
-};
-use std::sync::Arc;
-
-use crate::{
-    almacen::AlmacenUrls,
-    error::ErrorApp,
-    estado::EstadoApp,
-    models::{CodigoCorto, EntradaUrl, EstadisticasUrl, RespuestaAcortar, SolicitudAcortar},
-};
-
-/// GET /health — Kubernetes liveness probe
-pub async fn chequeo_salud() -> &'static str {
-    "OK"
-}
-
-/// POST /shorten — Crea una URL corta
-pub async fn acortar_url<S: AlmacenUrls>(
-    State(estado): State<Arc<EstadoApp<S>>>,
-    Json(cuerpo): Json<SolicitudAcortar>,
-) -> Result<(StatusCode, Json<RespuestaAcortar>), ErrorApp> {
-    // Validación básica de URL
-    if !cuerpo.url.starts_with("http://") && !cuerpo.url.starts_with("https://") {
-        return Err(ErrorApp::UrlInvalida(
-            "la URL debe empezar con http:// o https://".into(),
-        ));
-    }
-
-    let entrada = EntradaUrl::nueva(cuerpo.url);
-    let codigo  = entrada.codigo.clone();
-
-    estado.almacen.guardar(entrada).map_err(|_| ErrorApp::Almacenamiento)?;
-
-    let url_corta = format!("{}/{}", estado.base_url, codigo);
-
-    Ok((
-        StatusCode::CREATED,
-        Json(RespuestaAcortar { codigo, url_corta }),
-    ))
-}
-
-/// GET /{codigo} — Redirige a la URL original
-pub async fn redirigir<S: AlmacenUrls>(
-    State(estado): State<Arc<EstadoApp<S>>>,
-    Path(codigo_str): Path<String>,
-) -> Result<Redirect, ErrorApp> {
-    let codigo = CodigoCorto(codigo_str);
-
-    let entrada = estado
-        .almacen
-        .buscar(&codigo)
-        .ok_or(ErrorApp::NoEncontrado)?;
-
-    // Incrementar contador en background (no bloquea la respuesta)
-    let almacen = estado.almacen.clone();
-    let codigo_clone = codigo.clone();
-    tokio::spawn(async move {
-        almacen.incrementar_clics(&codigo_clone);
-    });
-
-    Ok(Redirect::permanent(&entrada.url_orig))
-}
-
-/// GET /{codigo}/stats — Estadísticas de una URL
-pub async fn estadisticas<S: AlmacenUrls>(
-    State(estado): State<Arc<EstadoApp<S>>>,
-    Path(codigo_str): Path<String>,
-) -> Result<Json<EstadisticasUrl>, ErrorApp> {
-    let codigo  = CodigoCorto(codigo_str);
-    let entrada = estado.almacen.buscar(&codigo).ok_or(ErrorApp::NoEncontrado)?;
-    Ok(Json(entrada.into()))
-}
-
-/// GET /urls — Lista todas las URLs (admin)
-pub async fn listar_urls<S: AlmacenUrls>(
-    State(estado): State<Arc<EstadoApp<S>>>,
-) -> Json<Vec<EstadisticasUrl>> {
-    let lista = estado
-        .almacen
-        .listar_todo()
-        .into_iter()
-        .map(EstadisticasUrl::from)
-        .collect();
-    Json(lista)
-}
+--8<-- "src/chapter_03/url_shortener_v1/src/handlers.rs"
 ```
 
 ### `src/main.rs`
 
 ```rust
-mod almacen;
-mod error;
-mod estado;
-mod handlers;
-mod models;
-
-use almacen::AlmacenMemoria;
-use estado::EstadoApp;
-use handlers::*;
-
-use axum::{
-    middleware::{self, Next},
-    extract::Request,
-    response::Response,
-    routing::{get, post},
-    Router,
-};
-use std::time::Instant;
-use tower_http::cors::CorsLayer;
-use tracing_subscriber::EnvFilter;
-
-// ── Middleware de telemetría ───────────────────────────────────────────────
-
-async fn telemetria(req: Request, next: Next) -> Response {
-    let inicio  = Instant::now();
-    let metodo  = req.method().clone();
-    let uri     = req.uri().path().to_owned();
-
-    let resp = next.run(req).await;
-
-    tracing::info!(
-        metodo = %metodo,
-        ruta   = %uri,
-        estado = resp.status().as_u16(),
-        ms     = inicio.elapsed().as_millis(),
-        "petición"
-    );
-
-    resp
-}
-
-// ── Entry point ───────────────────────────────────────────────────────────
-
-#[tokio::main]
-async fn main() {
-    // Logs estructurados: RUST_LOG=debug cargo run
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
-    let base_url = std::env::var("BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:3000".into());
-
-    let estado = EstadoApp::nuevo(AlmacenMemoria::nuevo(), base_url);
-
-    let app = Router::new()
-        .route("/health",        get(chequeo_salud::<AlmacenMemoria>))
-        .route("/shorten",       post(acortar_url::<AlmacenMemoria>))
-        .route("/urls",          get(listar_urls::<AlmacenMemoria>))
-        .route("/{codigo}",       get(redirigir::<AlmacenMemoria>))
-        .route("/{codigo}/stats", get(estadisticas::<AlmacenMemoria>))
-        .layer(middleware::from_fn(telemetria))
-        .layer(CorsLayer::permissive())
-        .with_state(estado);
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    tracing::info!("servidor escuchando en {}", listener.local_addr().unwrap());
-    axum::serve(listener, app).await.unwrap();
-}
+--8<-- "src/chapter_03/url_shortener_v1/src/main.rs"
 ```
 
 ### Probar el servidor
@@ -967,24 +637,41 @@ RUST_LOG=info cargo run
 # Terminal 2: crear una URL corta
 curl -s -X POST http://localhost:3000/shorten \
      -H "Content-Type: application/json" \
-     -d '{"url": "https://www.rust-lang.org"}' | jq .
-# {
-#   "codigo": { ... },
-#   "url_corta": "http://localhost:3000/ABC123"
-# }
+     -d '{"url": "https://www.rust-lang.org"}'
+# {"codigo":"bVgU5t16","url_corta":"http://localhost:3000/bVgU5t16"}
 
-# Redirigir (muestra la respuesta 301 sin seguir el redirect):
-curl -v http://localhost:3000/ABC123 2>&1 | grep -E "< (HTTP|Location)"
-# < HTTP/1.1 301 Moved Permanently
-# < location: https://www.rust-lang.org
+# Redirigir (muestra la respuesta sin seguir el redirect):
+curl -s -D - -o /dev/null http://localhost:3000/bVgU5t16 | grep -iE "^(HTTP|location)"
+# HTTP/1.1 308 Permanent Redirect
+# location: https://www.rust-lang.org
 
 # Ver estadísticas:
-curl -s http://localhost:3000/ABC123/stats | jq .
-# { "codigo": "ABC123", "url_orig": "https://...", "clics": 1 }
+curl -s http://localhost:3000/bVgU5t16/stats
+# {"codigo":"bVgU5t16","url_orig":"https://www.rust-lang.org","creada_en":1790724276,"clics":1}
+
+# URL inválida → 400; código inexistente → 404:
+curl -s -X POST http://localhost:3000/shorten \
+     -H "Content-Type: application/json" -d '{"url": "ftp://x"}'
+# {"error":"URL inválida: la URL debe empezar con http:// o https://"}
+curl -s http://localhost:3000/NOEXISTE
+# {"error":"URL no encontrada"}
 
 # Listar todo:
-curl -s http://localhost:3000/urls | jq .
+curl -s http://localhost:3000/urls
 ```
+
+El código es aleatorio, así que el tuyo será distinto. `CodigoCorto` es un *newtype*
+(`struct CodigoCorto(String)`) y Serde lo serializa como el `String` que envuelve, por
+eso aparece como texto y no como objeto.
+
+!!! note "¿308 o 301?"
+
+    `Redirect::permanent` de Axum responde **308 Permanent Redirect**, no 301. Ambos son
+    redirecciones permanentes que el navegador guarda en caché; la diferencia es que 308
+    obliga a repetir la petición con el mismo método y cuerpo (un `POST` sigue siendo
+    `POST`), mientras que con 301 los clientes suelen cambiarlo a `GET`. Para un
+    acortador cualquiera de los dos sirve. Si necesitas exactamente 301, devuelve
+    `(StatusCode::MOVED_PERMANENTLY, [(header::LOCATION, url)])`.
 
 ---
 
@@ -1042,7 +729,7 @@ fn construir_app<S: AlmacenUrls>(
     estado: std::sync::Arc<EstadoApp<S>>,
 ) -> Router {
     Router::new()
-        .route("/health",        get(chequeo_salud::<S>))
+        .route("/health",        get(chequeo_salud))
         .route("/shorten",       post(acortar_url::<S>))
         .route("/{codigo}",       get(redirigir::<S>))
         .route("/{codigo}/stats", get(estadisticas::<S>))

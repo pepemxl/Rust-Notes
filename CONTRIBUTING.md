@@ -95,6 +95,38 @@ Si un ejemplo es deliberadamente poco idiomático (por ejemplo, `println!("{}", 
 para enseñar placeholders), silencia el lint **solo en ese crate** con `[lints.clippy]` en
 su `Cargo.toml` y un comentario que explique por qué.
 
+**Dependencias en los ejemplos.** Los bloques pueden usar las crates listadas en
+`scripts/doc_deps/Cargo.toml` (tokio, axum, serde, sqlx, tracing…): el verificador las
+compila una vez y se las pasa a `rustc`. Si un ejemplo necesita otra, agrégala ahí.
+Si un bloque usa una crate que no está en la lista, se reporta como `externo` y no se
+verifica.
+
+**WebAssembly.** `src/chapter_04/mandelbrot_wasm` se compila también para
+`wasm32-unknown-unknown`. Para repetir lo que hace el CI:
+`rustup target add wasm32-unknown-unknown`, luego
+`cargo clippy -p mandelbrot-wasm --target wasm32-unknown-unknown` y, dentro del crate,
+`wasm-pack test --node`.
+
+**SQL en los ejemplos.** Los bloques con `sqlx::query!` se compilan como si estuvieran
+dentro de `src/chapter_03/url_shortener_v2` (sus migraciones y su caché `.sqlx/`). Con
+`DATABASE_URL` definida, el SQL se valida contra esa base; sin ella, esos bloques salen
+como `requiere_bd`. Para reproducir lo que hace el CI:
+
+```bash
+docker run -d --rm --name pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16-alpine
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres
+sqlx migrate run --source src/chapter_03/url_shortener_v2/migrations
+make check-doc-blocks
+```
+
+Si cambias una consulta de un crate con SQLx, regenera su caché con
+`cargo sqlx prepare` dentro de ese crate (con la base levantada) y versiona `.sqlx/`.
+
+**Rust 1.85 y `Cargo.lock`.** El CI prueba con 1.85 (la mínima para la edición 2024) y
+con stable. `yoke-derive` está fijado en 0.8.2 en `Cargo.lock` porque la 0.8.3 usa APIs
+de Rust 1.87 sin declararlo. Tras un `cargo update`, comprueba
+`cargo +1.85 build --workspace`.
+
 **Línea base de bloques.** Los fragmentos que dependen de un bloque anterior no compilan
 solos; están registrados en `scripts/doc_blocks_baseline.json`. El CI solo falla con
 fallos **nuevos**. Si arreglas bloques o agregas fragmentos a propósito, actualízala:

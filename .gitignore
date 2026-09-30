@@ -24,3 +24,6 @@ node_modules/
 # Videos de prueba de los reproductores: no se versionan.
 projects/**/*.mp4
 /LOCAL_DATA/
+
+# Artefactos que genera `cargo run -p xtask -- dist` (completions, man page)
+/src/chapter_04/dist/

@@ -460,109 +460,13 @@ completamente segura.
 `csrc/buffer.h`:
 
 ```c
-#ifndef BUFFER_H
-#define BUFFER_H
-
-#include <stddef.h>
-#include <stdint.h>
-
-/* Códigos de error */
-#define BUF_OK          0
-#define BUF_ERR_NULL   -1
-#define BUF_ERR_RANGE  -2
-#define BUF_ERR_ALLOC  -3
-
-/* Handle opaco — los usuarios nunca ven la estructura interna */
-typedef struct BufHandle BufHandle;
-
-/* Crear un buffer de `len` bytes inicializados a cero.
- * Devuelve NULL si falla la asignación de memoria. */
-BufHandle* buf_crear(size_t len);
-
-/* Liberar un buffer. Es seguro pasar NULL. */
-void buf_liberar(BufHandle* b);
-
-/* Longitud del buffer en bytes. */
-size_t buf_len(const BufHandle* b);
-
-/* Escribir `n` bytes de `data` en posición `offset`.
- * Devuelve BUF_OK o código de error. */
-int buf_escribir(BufHandle* b, size_t offset, const uint8_t* data, size_t n);
-
-/* Leer `n` bytes desde posición `offset` hacia `dest`.
- * Devuelve BUF_OK o código de error. */
-int buf_leer(const BufHandle* b, size_t offset, uint8_t* dest, size_t n);
-
-/* Aplicar XOR con `clave` a todo el buffer (cifrado/descifrado simétrico).
- * Devuelve BUF_OK o código de error. */
-int buf_xor(BufHandle* b, uint8_t clave);
-
-/* Borrar el contenido del buffer (poner a cero).
- * Devuelve BUF_OK o BUF_ERR_NULL. */
-int buf_limpiar(BufHandle* b);
-
-#endif /* BUFFER_H */
+--8<-- "src/chapter_04/safe_ffi/csrc/buffer.h"
 ```
 
 `csrc/buffer.c`:
 
 ```c
-#include "buffer.h"
-#include <stdlib.h>
-#include <string.h>
-
-struct BufHandle {
-    uint8_t* data;
-    size_t   len;
-};
-
-BufHandle* buf_crear(size_t len) {
-    BufHandle* b = (BufHandle*)malloc(sizeof(BufHandle));
-    if (!b) return NULL;
-    b->data = (uint8_t*)calloc(len, 1);  /* inicializado a cero */
-    if (!b->data) { free(b); return NULL; }
-    b->len = len;
-    return b;
-}
-
-void buf_liberar(BufHandle* b) {
-    if (!b) return;
-    /* Borrar memoria antes de liberar (evitar que secretos queden en heap) */
-    memset(b->data, 0, b->len);
-    free(b->data);
-    free(b);
-}
-
-size_t buf_len(const BufHandle* b) {
-    if (!b) return 0;
-    return b->len;
-}
-
-int buf_escribir(BufHandle* b, size_t offset, const uint8_t* data, size_t n) {
-    if (!b || !data) return BUF_ERR_NULL;
-    if (offset + n > b->len) return BUF_ERR_RANGE;
-    memcpy(b->data + offset, data, n);
-    return BUF_OK;
-}
-
-int buf_leer(const BufHandle* b, size_t offset, uint8_t* dest, size_t n) {
-    if (!b || !dest) return BUF_ERR_NULL;
-    if (offset + n > b->len) return BUF_ERR_RANGE;
-    memcpy(dest, b->data + offset, n);
-    return BUF_OK;
-}
-
-int buf_xor(BufHandle* b, uint8_t clave) {
-    if (!b) return BUF_ERR_NULL;
-    for (size_t i = 0; i < b->len; i++) b->data[i] ^= clave;
-    return BUF_OK;
-}
-
-int buf_limpiar(BufHandle* b) {
-    if (!b) return BUF_ERR_NULL;
-    memset(b->data, 0, b->len);
-    return BUF_OK;
-}
+--8<-- "src/chapter_04/safe_ffi/csrc/buffer.c"
 ```
 
 ### `src/raw.rs`: bindings manuales
@@ -571,64 +475,13 @@ En proyectos reales estos los genera `bindgen`; aquí los escribimos a mano para
 exactamente lo que genera:
 
 ```rust
-//! Bindings crudos de la biblioteca C `buffer`.
-//! Código generado (en proyecto real: include!(concat!(env!("OUT_DIR"), "/bindings.rs")))
-
-use std::os::raw::{c_int, c_uchar};
-
-/// Handle opaco — nunca instanciar directamente
-#[repr(C)]
-pub struct BufHandle {
-    _privado: [u8; 0],  // campo de tamaño cero: hace la struct no-instanciable
-}
-
-pub const BUF_OK: c_int        =  0;
-pub const BUF_ERR_NULL: c_int  = -1;
-pub const BUF_ERR_RANGE: c_int = -2;
-pub const BUF_ERR_ALLOC: c_int = -3;
-
-unsafe extern "C" {
-    pub fn buf_crear(len: usize) -> *mut BufHandle;
-    pub fn buf_liberar(b: *mut BufHandle);
-    pub fn buf_len(b: *const BufHandle) -> usize;
-    pub fn buf_escribir(b: *mut BufHandle, offset: usize, data: *const c_uchar, n: usize) -> c_int;
-    pub fn buf_leer(b: *const BufHandle, offset: usize, dest: *mut c_uchar, n: usize) -> c_int;
-    pub fn buf_xor(b: *mut BufHandle, clave: c_uchar) -> c_int;
-    pub fn buf_limpiar(b: *mut BufHandle) -> c_int;
-}
+--8<-- "src/chapter_04/safe_ffi/src/raw.rs"
 ```
 
 ### `src/error.rs`: tipos de error propios
 
 ```rust
-use std::fmt;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum ErrorBuffer {
-    #[error("asignación de memoria fallida en C")]
-    AsignacionFallida,
-
-    #[error("offset {offset} + longitud {longitud} supera el tamaño del buffer ({tam})")]
-    FueraDeRango { offset: usize, longitud: usize, tam: usize },
-
-    #[error("puntero nulo inesperado (error interno)")]
-    PunteroNulo,
-
-    #[error("código de error C desconocido: {0}")]
-    CodigoDesconocido(i32),
-}
-
-pub(crate) fn verificar_codigo(rc: i32, offset: usize, n: usize, tam: usize) -> Result<(), ErrorBuffer> {
-    use crate::raw::*;
-    match rc {
-        r if r == BUF_OK        => Ok(()),
-        r if r == BUF_ERR_NULL  => Err(ErrorBuffer::PunteroNulo),
-        r if r == BUF_ERR_RANGE => Err(ErrorBuffer::FueraDeRango { offset, longitud: n, tam }),
-        r if r == BUF_ERR_ALLOC => Err(ErrorBuffer::AsignacionFallida),
-        r => Err(ErrorBuffer::CodigoDesconocido(r)),
-    }
-}
+--8<-- "src/chapter_04/safe_ffi/src/error.rs"
 ```
 
 ### `src/safe.rs`: el wrapper seguro
@@ -636,255 +489,35 @@ pub(crate) fn verificar_codigo(rc: i32, offset: usize, n: usize, tam: usize) -> 
 Esta es la pieza central de la semana: una API que es imposible de usar mal.
 
 ```rust
-//! API Rust completamente segura sobre la biblioteca C `buffer`.
-//!
-//! Invariante de seguridad: `ptr` siempre es no nulo y apunta a un `BufHandle`
-//! válido, creado por `buf_crear` y aún no liberado. Se mantiene automáticamente
-//! por el constructor (`Buffer::nuevo`) y `impl Drop`.
+--8<-- "src/chapter_04/safe_ffi/src/safe.rs"
+```
 
-use std::ptr::NonNull;
+### `src/lib.rs` — la API pública
 
-use crate::{
-    error::{verificar_codigo, ErrorBuffer},
-    raw,
-};
+El wrapper es una **librería**: `raw` queda privado, así que quien use la crate solo
+puede llamar a la API segura. El binario de demostración la usa como cualquier otro
+cliente.
 
-/// Buffer de bytes con cifrado XOR, gestionado por la biblioteca C.
-///
-/// # Garantías
-/// - La memoria se libera y se borra al hacer `drop`.
-/// - Todas las operaciones verifican bounds antes de tocar memoria C.
-/// - Imposible crear un `Buffer` con puntero nulo (usa `NonNull`).
-pub struct Buffer {
-    /// Invariante: siempre válido, no nulo, creado por buf_crear, no liberado.
-    ptr: NonNull<raw::BufHandle>,
-}
-
-// SAFETY: BufHandle no tiene referencias a datos de hilos; la exclusión
-// mutua es responsabilidad del llamador (como con Vec<T>).
-unsafe impl Send for Buffer {}
-unsafe impl Sync for Buffer {}
-
-impl Buffer {
-    /// Crea un nuevo buffer de `longitud` bytes, inicializado a cero.
-    pub fn nuevo(longitud: usize) -> Result<Self, ErrorBuffer> {
-        // SAFETY: buf_crear devuelve NULL en fallo o un puntero válido.
-        let ptr = unsafe { raw::buf_crear(longitud) };
-
-        NonNull::new(ptr)
-            .map(|p| Buffer { ptr: p })
-            .ok_or(ErrorBuffer::AsignacionFallida)
-    }
-
-    /// Longitud del buffer en bytes.
-    pub fn len(&self) -> usize {
-        // SAFETY: ptr es válido por el invariante del tipo.
-        unsafe { raw::buf_len(self.ptr.as_ptr()) }
-    }
-
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
-
-    /// Escribe `datos` en posición `offset`.
-    ///
-    /// # Errors
-    /// Devuelve `FueraDeRango` si `offset + datos.len() > self.len()`.
-    pub fn escribir(&mut self, offset: usize, datos: &[u8]) -> Result<(), ErrorBuffer> {
-        let rc = unsafe {
-            raw::buf_escribir(
-                self.ptr.as_ptr(),
-                offset,
-                datos.as_ptr(),
-                datos.len(),
-            )
-        };
-        verificar_codigo(rc, offset, datos.len(), self.len())
-    }
-
-    /// Lee `n` bytes desde posición `offset`.
-    ///
-    /// # Errors
-    /// Devuelve `FueraDeRango` si `offset + n > self.len()`.
-    pub fn leer(&self, offset: usize, n: usize) -> Result<Vec<u8>, ErrorBuffer> {
-        let mut dest = vec![0u8; n];
-        let rc = unsafe {
-            raw::buf_leer(self.ptr.as_ptr(), offset, dest.as_mut_ptr(), n)
-        };
-        verificar_codigo(rc, offset, n, self.len())?;
-        Ok(dest)
-    }
-
-    /// Aplica XOR con `clave` a todo el buffer.
-    /// Llamar dos veces con la misma clave restaura el original (cifrado simétrico).
-    pub fn aplicar_xor(&mut self, clave: u8) -> Result<(), ErrorBuffer> {
-        let rc = unsafe { raw::buf_xor(self.ptr.as_ptr(), clave) };
-        verificar_codigo(rc, 0, 0, self.len())
-    }
-
-    /// Borra todos los bytes del buffer (pone a cero).
-    pub fn limpiar(&mut self) -> Result<(), ErrorBuffer> {
-        let rc = unsafe { raw::buf_limpiar(self.ptr.as_ptr()) };
-        verificar_codigo(rc, 0, 0, self.len())
-    }
-
-    /// Devuelve una copia de todos los bytes del buffer.
-    pub fn contenido(&self) -> Result<Vec<u8>, ErrorBuffer> {
-        self.leer(0, self.len())
-    }
-}
-
-impl Drop for Buffer {
-    fn drop(&mut self) {
-        // SAFETY: ptr es válido (invariante del tipo) y esta es la única
-        // vez que se libera (Drop se llama exactamente una vez por objeto).
-        unsafe { raw::buf_liberar(self.ptr.as_ptr()) }
-        // buf_liberar internamente borra la memoria con memset antes de free.
-    }
-}
-
-impl std::fmt::Debug for Buffer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Buffer({} bytes)", self.len())
-    }
-}
+```rust
+--8<-- "src/chapter_04/safe_ffi/src/lib.rs"
 ```
 
 ### `src/main.rs`: demostración y tests
 
 ```rust
-mod error;
-mod raw;
-mod safe;
-
-use safe::Buffer;
-
-fn main() -> Result<(), error::ErrorBuffer> {
-    println!("=== Demo: Buffer seguro sobre C ===\n");
-
-    // Crear buffer de 16 bytes
-    let mut buf = Buffer::nuevo(16)?;
-    println!("Creado: {buf:?}");
-
-    // Escribir un mensaje
-    let mensaje = b"Hola desde Rust!";
-    buf.escribir(0, mensaje)?;
-    println!("Escrito: {:?}", buf.contenido()?);
-
-    // Cifrar con XOR
-    buf.aplicar_xor(0x42)?;
-    println!("Cifrado (XOR 0x42): {:?}", buf.contenido()?);
-
-    // Descifrar (XOR es simétrico)
-    buf.aplicar_xor(0x42)?;
-    let descifrado = buf.contenido()?;
-    println!("Descifrado: {:?}", String::from_utf8_lossy(&descifrado));
-
-    // Error controlado: fuera de rango
-    match buf.escribir(10, b"texto demasiado largo") {
-        Ok(_) => panic!("debería haber fallado"),
-        Err(e) => println!("\nError esperado: {e}"),
-    }
-
-    // buf se libera aquí (Drop → buf_liberar → memset + free)
-    println!("\n✓ Buffer liberado automáticamente");
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::safe::Buffer;
-
-    #[test]
-    fn crear_y_leer_cero() {
-        let buf = Buffer::nuevo(8).unwrap();
-        assert_eq!(buf.len(), 8);
-        assert_eq!(buf.contenido().unwrap(), vec![0u8; 8]);
-    }
-
-    #[test]
-    fn escribir_y_leer() {
-        let mut buf = Buffer::nuevo(16).unwrap();
-        buf.escribir(0, b"test").unwrap();
-        assert_eq!(&buf.leer(0, 4).unwrap(), b"test");
-        assert_eq!(buf.leer(4, 1).unwrap(), vec![0u8]);
-    }
-
-    #[test]
-    fn escritura_fuera_de_rango() {
-        let mut buf = Buffer::nuevo(4).unwrap();
-        let err = buf.escribir(2, b"largo").unwrap_err();
-        assert!(matches!(err, crate::error::ErrorBuffer::FueraDeRango { .. }));
-    }
-
-    #[test]
-    fn xor_simetrico() {
-        let datos = b"secreto";
-        let mut buf = Buffer::nuevo(datos.len()).unwrap();
-        buf.escribir(0, datos).unwrap();
-
-        buf.aplicar_xor(0x5A).unwrap();
-        let cifrado = buf.contenido().unwrap();
-        assert_ne!(cifrado, datos);
-
-        buf.aplicar_xor(0x5A).unwrap();
-        assert_eq!(buf.contenido().unwrap(), datos);
-    }
-
-    #[test]
-    fn limpiar_borra_contenido() {
-        let mut buf = Buffer::nuevo(8).unwrap();
-        buf.escribir(0, b"datos").unwrap();
-        buf.limpiar().unwrap();
-        assert_eq!(buf.contenido().unwrap(), vec![0u8; 8]);
-    }
-
-    #[test]
-    fn drop_no_doble_free() {
-        // Simplemente crea y deja que Drop lo limpie.
-        // Si hubiera doble-free, el OS o Miri lo detectarían.
-        let mut buf = Buffer::nuevo(32).unwrap();
-        buf.escribir(0, &[42u8; 32]).unwrap();
-        // drop implícito aquí
-    }
-
-    #[test]
-    fn buffer_vacio_falla() {
-        // C permite buf_crear(0) pero es un caso borde
-        let buf = Buffer::nuevo(0).unwrap();
-        assert_eq!(buf.len(), 0);
-        assert!(buf.is_empty());
-    }
-}
+--8<-- "src/chapter_04/safe_ffi/src/main.rs"
 ```
 
 ### `Cargo.toml` completo del proyecto
 
 ```toml
-[package]
-name    = "safe_ffi"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-thiserror = "2"
-
-[build-dependencies]
-cc      = "1"
-# bindgen = "0.72"   # descomentar cuando uses headers C externos
+--8<-- "src/chapter_04/safe_ffi/Cargo.toml"
 ```
 
 `build.rs`:
 
 ```rust
-fn main() {
-    println!("cargo:rerun-if-changed=csrc/buffer.h");
-    println!("cargo:rerun-if-changed=csrc/buffer.c");
-
-    cc::Build::new()
-        .file("csrc/buffer.c")
-        .include("csrc")
-        .flag_if_supported("-O2")
-        .compile("buffer");
-}
+--8<-- "src/chapter_04/safe_ffi/build.rs"
 ```
 
 Ejecutar:

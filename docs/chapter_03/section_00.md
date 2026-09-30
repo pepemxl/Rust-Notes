@@ -404,6 +404,8 @@ sqlx migrate run
 
 #### 3. Serde Avanzado: Control Total
 ```rust
+use serde::{Deserialize, Serialize};
+
 #[derive(Serialize, Deserialize, sqlx::FromRow)]
 pub struct UrlEntry {
     #[serde(rename = "short_code")] // JSON key distinto a campo Rust
@@ -546,22 +548,21 @@ async fn redirect<S>(State(storage): State<Arc<S>>, Path(code): Path<ShortCode>)
 #### 2. Métricas Prometheus (`metrics` + `metrics-exporter-prometheus`)
 ```rust
 use metrics::{counter, histogram, gauge};
-use metrics_exporter_prometheus::PrometheusBuilder;
+use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 
-// En main (una vez)
-let recorder = PrometheusBuilder::new().build_recorder();
-metrics::set_boxed_recorder(Box::new(recorder)).unwrap();
+// En main (una vez): instala el recorder global y devuelve un handle para /metrics
+let handle: PrometheusHandle = PrometheusBuilder::new().install_recorder().unwrap();
 
 // En código
 counter!("http_requests_total", "method" => "POST", "route" => "/shorten", "status" => "200").increment(1);
 histogram!("db_query_duration_seconds", "query" => "insert_url").record(elapsed.as_secs_f64());
 gauge!("active_connections").increment(1.0);
 
-// Endpoint /metrics
-async fn metrics_endpoint() -> String {
-    metrics_exporter_prometheus::encode_to_string().unwrap()
+// Endpoint /metrics: el handle renderiza el formato de texto de Prometheus
+async fn metrics_endpoint(State(handle): State<PrometheusHandle>) -> String {
+    handle.render()
 }
-// Router: .route("/metrics", get(metrics_endpoint))
+// Router: .route("/metrics", get(metrics_endpoint)).with_state(handle)
 ```
 
 #### 3. Health Checks (Kubernetes Ready)
@@ -902,7 +903,7 @@ impl IntoResponse for AppError {
 
 ### Proyecto Integrador: `url-shortener`
 - [ ] `POST /shorten` -> `201 Created` + JSON `{ code, short_url }`.
-- [ ] `GET /{code}` -> `301 Redirect` + Incremento atómico `clicks`.
+- [ ] `GET /{code}` -> `308 Permanent Redirect` + Incremento atómico `clicks`.
 - [ ] `GET /health` / `/ready` / `/metrics` funcionando.
 - [ ] Persistencia **PostgreSQL** (Docker Compose local / Testcontainers CI).
 - [ ] Rate Limiting (ej. 10 req/s/IP) funcional.

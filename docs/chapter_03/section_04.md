@@ -60,17 +60,21 @@ flujo completo de una petición de extremo a extremo.
 ```rust
 use tracing::{debug, error, info, trace, warn};
 
-// Niveles: trace < debug < info < warn < error
-trace!(detalle = "muy verboso", "solo en diagnóstico");
-debug!(query = "SELECT ...", rows = 42, "resultado de BD");
-info!(codigo = %codigo, url = %url_orig, "URL acortada");  // %: usa Display
-warn!(limite = 0.9, actual = 0.95, "uso de pool elevado");
-error!(err = ?e, "error al guardar");                      // ?: usa Debug
+fn registrar(codigo: &str, url_orig: &str, e: &std::io::Error) {
+    // Niveles: trace < debug < info < warn < error
+    trace!(detalle = "muy verboso", "solo en diagnóstico");
+    debug!(query = "SELECT ...", rows = 42, "resultado de BD");
+    info!(codigo = %codigo, url = %url_orig, "URL acortada"); // %: usa Display
+    warn!(limite = 0.9, actual = 0.95, "uso de pool elevado");
+    error!(err = ?e, "error al guardar"); // ?: usa Debug
+}
 ```
 
 La diferencia entre `%valor` (Display) y `?valor` (Debug):
 
 ```rust
+use tracing::info;
+
 let url = "https://example.com";
 info!(url = %url, "petición");   // info!(url = "https://example.com", ...)
 info!(url = ?url, "petición");   // info!(url = "\"https://example.com\"", ...)
@@ -79,7 +83,7 @@ info!(url = ?url, "petición");   // info!(url = "\"https://example.com\"", ...)
 ### Spans manuales
 
 ```rust
-use tracing::{info_span, Instrument};
+use tracing::{info, info_span, Instrument};
 
 async fn operacion_compleja() {
     // Span que envuelve todo el bloque async
@@ -100,7 +104,7 @@ El macro más útil de `tracing`. Convierte cada llamada a la función en un spa
 captura automáticamente los argumentos como campos:
 
 ```rust
-use tracing::instrument;
+use tracing::{debug, info, instrument, warn};
 
 #[instrument(skip(pool), fields(code = %code))]
 async fn buscar_en_bd(pool: &sqlx::PgPool, code: &str) -> Option<String> {
@@ -284,14 +288,12 @@ metrics-exporter-prometheus = "0.16"
 use metrics_exporter_prometheus::PrometheusBuilder;
 
 pub fn inicializar_metricas() -> metrics_exporter_prometheus::PrometheusHandle {
-    let (recorder, handle) = PrometheusBuilder::new()
-        .build()
-        .expect("no se pudo inicializar Prometheus");
-
-    metrics::set_global_recorder(recorder)
-        .expect("recorder ya inicializado");
-
-    handle
+    // install_recorder() registra el recorder global y devuelve el handle que
+    // usaremos en /metrics. (build() devolvería el recorder y un servidor HTTP
+    // propio, que no necesitamos porque Axum ya sirve el endpoint.)
+    PrometheusBuilder::new()
+        .install_recorder()
+        .expect("no se pudo instalar el recorder de Prometheus")
 }
 ```
 
@@ -329,51 +331,59 @@ En lugar de registrar métricas en cada handler, un middleware las captura para 
 las rutas:
 
 ```rust
-use axum::{extract::Request, middleware::Next, response::Response};
+use axum::{
+    extract::{MatchedPath, Request},
+    middleware::Next,
+    response::Response,
+};
 use metrics::{counter, histogram};
 use std::time::Instant;
 
 pub async fn middleware_metricas(req: Request, next: Next) -> Response {
-    let inicio  = Instant::now();
-    let metodo  = req.method().to_string();
-    let ruta    = req.uri().path().to_owned();
-
-    // Anonimizar rutas con parámetros: /ab12Cd → /{codigo}
-    let ruta_plantilla = anonimizar_ruta(&ruta);
+    let inicio = Instant::now();
+    let metodo = req.method().to_string();
+    // MatchedPath es la plantilla con la que Axum encontró la ruta: "/{codigo}",
+    // no la URL real "/L4fz9R14". Las peticiones que no coinciden con ninguna ruta
+    // (404) no lo tienen.
+    let ruta = req
+        .extensions()
+        .get::<MatchedPath>()
+        .map(|p| p.as_str().to_owned())
+        .unwrap_or_else(|| "sin_ruta".into());
 
     let resp = next.run(req).await;
 
-    let estado  = resp.status().as_u16().to_string();
+    let estado = resp.status().as_u16().to_string();
     let latencia = inicio.elapsed().as_secs_f64();
 
     counter!("http_requests_total",
         "method" => metodo.clone(),
-        "route"  => ruta_plantilla.clone(),
+        "route"  => ruta.clone(),
         "status" => estado
     ).increment(1);
 
     histogram!("http_request_duration_seconds",
         "method" => metodo,
-        "route"  => ruta_plantilla
+        "route"  => ruta
     ).record(latencia);
 
     resp
 }
-
-fn anonimizar_ruta(ruta: &str) -> String {
-    // Convierte /abc123 en /{codigo}, /abc123/stats en /{codigo}/stats
-    let partes: Vec<&str> = ruta.trim_start_matches('/').split('/').collect();
-    let anonimizadas: Vec<&str> = partes
-        .iter()
-        .map(|p| if p.len() == 8 && p.chars().all(|c| c.is_alphanumeric()) {
-            "{codigo}"
-        } else {
-            p
-        })
-        .collect();
-    format!("/{}", anonimizadas.join("/"))
-}
 ```
+
+!!! warning "Cuidado con la cardinalidad"
+
+    Nunca uses la URL real como etiqueta (`req.uri().path()`). Cada combinación de
+    etiquetas es una **serie temporal** distinta en Prometheus: con la ruta cruda, cada
+    URL acortada crearía series nuevas y la memoria del servidor de métricas crecería sin
+    límite. Con `MatchedPath`, tres redirecciones a códigos distintos se agregan en una
+    sola serie:
+
+    ```text
+    http_requests_total{method="GET",route="/{codigo}",status="308"} 3
+    http_requests_total{method="POST",route="/shorten",status="201"} 3
+    http_requests_total{method="GET",route="sin_ruta",status="404"} 1
+    ```
 
 ### Handler `/metrics`
 
@@ -394,7 +404,7 @@ El output que Prometheus leerá:
 # HELP http_requests_total Total de peticiones HTTP
 # TYPE http_requests_total counter
 http_requests_total{method="POST",route="/shorten",status="201"} 42
-http_requests_total{method="GET",route="/{codigo}",status="301"} 189
+http_requests_total{method="GET",route="/{codigo}",status="308"} 189
 
 # HELP http_request_duration_seconds Latencia de peticiones HTTP
 # TYPE http_request_duration_seconds histogram
@@ -707,175 +717,16 @@ scrape_configs:
 
 ## `main.rs` final: todo integrado
 
+El servidor de la Semana 11 más todo lo de esta semana. Los módulos de negocio
+(almacén, handlers, modelos) no cambian, así que en el repositorio
+[`url_shortener_v3`](https://github.com/pepemxl/Rust-Notes/tree/master/src/chapter_03/url_shortener_v3)
+los reutiliza como dependencia de la librería de la v2, y este `main.rs` solo añade
+tracing, métricas, health checks y apagado graceful. En tu proyecto, basta con
+reemplazar el `main.rs` de la Semana 11 por este (con `mod` en lugar de
+`use url_shortener::`).
+
 ```rust
-mod almacen;
-mod error;
-mod estado;
-mod handlers;
-mod models;
-
-use almacen::AlmacenPostgres;
-use estado::EstadoApp;
-use handlers::{acortar_url, chequeo_salud, estadisticas, listar_urls, redirigir};
-
-use axum::{
-    extract::{Request, State},
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
-    routing::{get, post},
-    Router,
-};
-use metrics::{counter, histogram};
-use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
-use sqlx::PgPool;
-use std::time::Instant;
-use tokio::signal;
-use tower_http::cors::CorsLayer;
-use tracing::instrument;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-// ── Tracing ───────────────────────────────────────────────────────────────
-
-fn inicializar_tracing() {
-    let filtro = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,sqlx=warn,tower_http=debug"));
-    let entorno = std::env::var("ENTORNO").unwrap_or_else(|_| "dev".into());
-
-    let reg = tracing_subscriber::registry().with(filtro);
-    if entorno == "prod" {
-        reg.with(tracing_subscriber::fmt::layer().json()).init();
-    } else {
-        reg.with(tracing_subscriber::fmt::layer().pretty()).init();
-    }
-}
-
-// ── Métricas ──────────────────────────────────────────────────────────────
-
-fn inicializar_metricas() -> PrometheusHandle {
-    let (recorder, handle) = PrometheusBuilder::new().build().unwrap();
-    metrics::set_global_recorder(recorder).unwrap();
-    handle
-}
-
-async fn handler_metricas(State(handle): State<PrometheusHandle>) -> impl IntoResponse {
-    handle.render()
-}
-
-// ── Health Checks ─────────────────────────────────────────────────────────
-
-async fn liveness() -> &'static str { "OK" }
-
-async fn readiness(State(pool): State<PgPool>) -> impl IntoResponse {
-    use axum::http::StatusCode;
-    use serde_json::json;
-    match pool.acquire().await {
-        Ok(_)  => (StatusCode::OK, axum::Json(json!({"status":"ready","db":"ok"}))).into_response(),
-        Err(e) => (StatusCode::SERVICE_UNAVAILABLE,
-                   axum::Json(json!({"status":"not_ready","db":e.to_string()}))).into_response(),
-    }
-}
-
-// ── Middleware ────────────────────────────────────────────────────────────
-
-async fn middleware_observabilidad(req: Request, next: Next) -> Response {
-    let inicio  = Instant::now();
-    let metodo  = req.method().to_string();
-    let ruta    = req.uri().path().to_owned();
-
-    let resp    = next.run(req).await;
-
-    let estado  = resp.status().as_u16().to_string();
-    let latencia = inicio.elapsed().as_secs_f64();
-
-    tracing::info!(
-        metodo = %metodo, ruta = %ruta,
-        estado = %estado, ms = (latencia * 1000.0) as u64,
-        "petición completada"
-    );
-
-    counter!("http_requests_total",
-        "method" => metodo.clone(), "route" => ruta.clone(), "status" => estado
-    ).increment(1);
-
-    histogram!("http_request_duration_seconds",
-        "method" => metodo, "route" => ruta
-    ).record(latencia);
-
-    resp
-}
-
-// ── Apagado graceful ──────────────────────────────────────────────────────
-
-async fn senal_apagado() {
-    let ctrl_c = async {
-        signal::ctrl_c().await.expect("error instalando Ctrl+C");
-    };
-    #[cfg(unix)]
-    let sigterm = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("error instalando SIGTERM")
-            .recv().await;
-    };
-    #[cfg(not(unix))]
-    let sigterm = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c  => tracing::info!("Ctrl+C recibido"),
-        _ = sigterm => tracing::info!("SIGTERM recibido"),
-    }
-    tracing::info!("iniciando apagado graceful...");
-}
-
-// ── Entry point ───────────────────────────────────────────────────────────
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    inicializar_tracing();
-    let metricas_handle = inicializar_metricas();
-
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL debe estar definida");
-    let base_url = std::env::var("BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:3000".into());
-
-    // Pool con tamaño apropiado para el número de workers del runtime
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .min_connections(2)
-        .max_connections(20)
-        .connect(&database_url)
-        .await?;
-
-    sqlx::migrate!("./migrations").run(&pool).await?;
-    tracing::info!("migraciones aplicadas");
-
-    let almacen = AlmacenPostgres::nuevo(pool.clone());
-    let estado  = EstadoApp::nuevo(almacen, base_url);
-
-    let app = Router::new()
-        // Endpoints de negocio
-        .route("/shorten",       post(acortar_url::<AlmacenPostgres>))
-        .route("/urls",          get(listar_urls::<AlmacenPostgres>))
-        .route("/{codigo}",       get(redirigir::<AlmacenPostgres>))
-        .route("/{codigo}/stats", get(estadisticas::<AlmacenPostgres>))
-        .with_state(estado)
-        // Endpoints de infraestructura (estado propio, no el del negocio)
-        .route("/health",   get(liveness))
-        .route("/ready",    get(readiness).with_state(pool))
-        .route("/metrics",  get(handler_metricas).with_state(metricas_handle))
-        // Middleware en orden: primero observabilidad, luego CORS
-        .layer(middleware::from_fn(middleware_observabilidad))
-        .layer(CorsLayer::permissive());
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    tracing::info!(addr = %listener.local_addr()?, "servidor arrancado");
-
-    axum::serve(listener, app)
-        .with_graceful_shutdown(senal_apagado())
-        .await?;
-
-    tracing::info!("servidor apagado limpiamente");
-    Ok(())
-}
+--8<-- "src/chapter_03/url_shortener_v3/src/main.rs"
 ```
 
 ---
@@ -1130,7 +981,7 @@ docker compose down
 ### Proyecto integrador completo
 
 - [ ] `POST /shorten` → `201 Created` + JSON `{ codigo, url_corta }`.
-- [ ] `GET /{codigo}` → `301 Redirect` + incremento atómico de clics en PG.
+- [ ] `GET /{codigo}` → `308 Permanent Redirect` + incremento atómico de clics en PG.
 - [ ] `GET /{codigo}/stats` → JSON con `creada_en` como Unix timestamp (Serde `with`).
 - [ ] `GET /health` → `200 OK`.
 - [ ] `GET /ready` → `200 OK` si BD disponible, `503` si no.

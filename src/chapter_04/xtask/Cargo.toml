@@ -1,0 +1,12 @@
+[package]
+name    = "xtask"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+mytool        = { path = "../mytool" }
+clap          = "4"
+clap_complete = "4"
+clap_mangen   = "0.2"

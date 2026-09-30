@@ -29,12 +29,12 @@ all: docs-build ## Default build (renders the static docs site)
 
 check: check-rust check-doc-blocks check-docs check-spelling check-python ## Run every check the CI runs
 
-check-rust: ## fmt + clippy + tests of the example workspace (src/)
+check-rust: ## fmt + clippy + tests of the example workspace (src/; tests need Docker)
 	cargo fmt --all --check
-	cargo clippy --workspace --all-targets -- -D warnings
-	cargo test --workspace
+	SQLX_OFFLINE=true cargo clippy --workspace --all-targets -- -D warnings
+	SQLX_OFFLINE=true cargo test --workspace
 
-check-doc-blocks: ## Compile every ```rust block in docs/ against the baseline
+check-doc-blocks: ## Compile every ```rust block in docs/ (set DATABASE_URL to validate SQL)
 	python3 scripts/check_doc_blocks.py
 
 check-docs: ## Build the site in strict mode (broken links, missing snippets)

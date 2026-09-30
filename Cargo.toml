@@ -3,7 +3,7 @@
 # con pymdownx.snippets (--8<-- "src/..."), así lo que se lee es lo que se compila.
 [workspace]
 resolver = "3"
-members = ["src/chapter_*/*"]
+members = ["src/chapter_*/*", "scripts/doc_deps"]
 exclude = [
     "src/chapter_01/example_02", # un solo archivo compilado con `rustc`, sin Cargo
     "projects",                  # proyectos de práctica independientes

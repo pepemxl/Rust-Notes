@@ -1,0 +1,31 @@
+// Reglas de un formato de configuración sencillo:
+// [seccion]
+// clave = "valor"
+// clave = 42
+
+// WHITESPACE se aplica entre tokens automáticamente (regla especial de pest)
+WHITESPACE = _{ " " | "\t" }   // _ = regla silenciosa: no aparece en el árbol
+
+// Comentarios (silenciosos)
+COMMENT = _{ "#" ~ (!"\n" ~ ANY)* }
+
+// Literales primitivos
+numero    =  { ASCII_DIGIT+ }
+booleano  =  { "true" | "false" }
+cadena    =  { "\"" ~ (!("\"") ~ ANY)* ~ "\"" }
+valor     =  { cadena | numero | booleano }
+
+// Identificadores: letras, dígitos y guiones bajos
+ident     =  { (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Par clave = valor
+par       =  { ident ~ "=" ~ valor }
+
+// Sección: [nombre]
+encabezado = { "[" ~ ident ~ "]" }
+
+// Una sección completa
+seccion   =  { encabezado ~ NEWLINE+ ~ (par ~ NEWLINE*)* }
+
+// El archivo completo
+archivo   =  { SOI ~ (seccion | NEWLINE)* ~ EOI }

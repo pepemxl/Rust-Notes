@@ -1,0 +1,32 @@
+[package]
+name    = "mandelbrot-wasm"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default  = []
+parallel = ["rayon", "wasm-bindgen-rayon", "wasm-bindgen-futures"]
+
+[dependencies]
+wasm-bindgen             = "0.2"
+console_error_panic_hook = "0.1"
+js-sys                   = "0.3"
+web-sys = { version = "0.3", features = [
+    "console",
+    "Window",
+    "Performance",
+] }
+
+# Solo activos con la feature "parallel"
+rayon              = { version = "1", optional = true }
+wasm-bindgen-rayon = { version = "1", optional = true }
+# init_thread_pool es async: exportarlo a JS necesita wasm-bindgen-futures
+wasm-bindgen-futures = { version = "0.4", optional = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

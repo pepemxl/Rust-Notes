@@ -15,6 +15,7 @@
     "f57c42cf0bc65b8d"
   ],
   "docs/chapter_01/section_06.md": [
+    "0fb2cd7baa93b53d",
     "6069bbc7009509f8",
     "61ebf9a197110326",
     "75d282ddffb062c0",
@@ -26,6 +27,7 @@
   "docs/chapter_02/section_00.md": [
     "22f10f5bff01197f",
     "c9817a1248367300",
+    "e4546c50d9f004cd",
     "f3587a614e7ad640"
   ],
   "docs/chapter_02/section_02.md": [
@@ -50,60 +52,90 @@
   "docs/chapter_03/section_00.md": [
     "0859ea4547caee30",
     "120a993e0470dc5f",
+    "23b84de38886c1e6",
+    "2a46d2c7aeb14fa7",
+    "39389922dba55806",
+    "5e6ec500c4644e37",
+    "7a785183c8e3b464",
     "804862916a783e00",
+    "b1e308528aa93c8f",
     "cae8fd3ebf9c4d95",
     "d958ebecb981965f",
+    "e7c7a45ba23c6b3e",
     "eeab219a7bf1672a",
     "ef4455b88eb66b19"
   ],
   "docs/chapter_03/section_01.md": [
+    "1705523590bf6f4b",
     "487e8b6075f5619b",
     "8b1235d2a08a530b",
+    "9b63cb09166cb2fe",
     "c44eb67a9dabf0e8",
     "e5e6d98f239dcfd2",
     "f64c6fe9f23d5db6",
     "f7e019230d1dadde"
   ],
-  "docs/chapter_03/section_02.md": [
-    "3ddfab292b314ccd"
-  ],
-  "docs/chapter_03/section_04.md": [
-    "2b0dc62e3920347a"
-  ],
   "docs/chapter_04/section_00.md": [
+    "3d73e587bf7271c3",
     "7fe0a29a2002b73c",
+    "8a3d6d4c3ec106cf",
     "ca15ab9e82532e17",
-    "d7e20ea863fda0f5"
+    "cf06d8edc25679ed",
+    "d7e20ea863fda0f5",
+    "e3ef05484ab2bbb5"
+  ],
+  "docs/chapter_04/section_01.md": [
+    "0bff794848264f2b",
+    "c1e90d76a2efb5a0",
+    "f127b3f8efbd4b03"
   ],
   "docs/chapter_04/section_02.md": [
-    "549ab896175a1ffa",
     "80bba019253eb92a",
-    "d4387f5d904b2c97",
-    "ed829aa29b33a158"
+    "d4387f5d904b2c97"
+  ],
+  "docs/chapter_04/section_03.md": [
+    "f03f849d9ad60ee6"
   ],
   "docs/chapter_04/section_04.md": [
-    "e0d79ad81ef65f41",
-    "eec27cf91c2dad85"
+    "2d33631536b972b0"
   ],
   "docs/chapter_05/section_00.md": [
     "411a2317fb67636d",
+    "7c1f1dfed21b87ca",
     "9b6dfe7979e62198",
     "ee08d122c2e05786"
   ],
   "docs/chapter_05/section_01.md": [
     "022cb65e11d5c7c3",
+    "39ac34393ff9ba96",
+    "4311257a47184892",
+    "5d2819b8a48c7409",
     "70a998f2283d01a2",
-    "da824ef8b9eadb80"
+    "c4fbbc7ef7695321",
+    "d4b6aa03ddb09828",
+    "da824ef8b9eadb80",
+    "eb894df59f6cdf80"
+  ],
+  "docs/chapter_05/section_02.md": [
+    "edba087fd25544b6"
   ],
   "docs/chapter_05/section_04.md": [
     "9024f95266be8ac9"
   ],
   "docs/chapter_06/section_00.md": [
-    "b2c5bfbb1f3d06d7"
+    "4071db17d8fc85fc",
+    "b2c5bfbb1f3d06d7",
+    "e74e0c2dee5cc1e7"
   ],
   "docs/chapter_06/section_02.md": [
+    "02f3afda7d64ec59",
     "43efc80d49e90713",
     "94a6eea0284403ee",
+    "c22f9810bb1ba2d5",
     "db45889ce7a1c08d"
+  ],
+  "docs/chapter_06/section_03.md": [
+    "9014519e7cdbd654",
+    "bbd4a4ced777d3d2"
   ]
 }
