@@ -141,7 +141,7 @@ fn start_counter() -> CounterHandle {
 *   **Traits como Interfaces:** `trait Database { async fn get(&self, id: Id) -> Result<...>; }`.
 *   **Config:** `figment` / `config` crate (Layered: File -> Env -> CLI). `Figment::new().merge(Serialized::default(Config::default())).merge(Env::prefixed("APP_")).extract()`.
 
-### 🛠️ Proyecto: **Refactor Url Shortener v3 — Actor Model + Typestate**
+### 🛠️ Proyecto: **Refactor Url Shortener v4 — Actor Model + Typestate**
 
 #### Requisitos Arquitectónicos
 1.  **Typestate para `UrlEntry`**:
@@ -197,19 +197,17 @@ fn start_counter() -> CounterHandle {
 
 ### 🛠️ Benchmark Científico: **Contador Distribuido (Sharded Counter)**
 
-#### Implementaciones a Comparar (`benches/counter_bench.rs`)
+#### Implementaciones a comparar
+
 ```rust
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use parking_lot::Mutex;
 use dashmap::DashMap;
-use crossbeam::channel;
+use parking_lot::Mutex;
 
 // 1. Atomic Relaxed (Sharded + Cache Padded)
 #[repr(align(64))] struct PaddedAtomic(AtomicUsize);
 struct RelaxedCounter { shards: Box<[PaddedAtomic]> }
-impl RelaxedCounter { 
+impl RelaxedCounter {
     fn inc(&self, idx: usize) { self.shards[idx].0.fetch_add(1, Ordering::Relaxed); }
     fn get(&self) -> usize { self.shards.iter().map(|s| s.0.load(Ordering::Relaxed)).sum() }
 }
@@ -217,27 +215,17 @@ impl RelaxedCounter {
 // 2. Mutex (parking_lot) Sharded
 struct MutexCounter { shards: Box<[Mutex<usize>]> }
 
-// 3. DashMap (Single Key)
-struct DashMapCounter { map: DashMap<usize, usize> } // Key = ThreadID % Shards
+// 3. DashMap (Key = índice de hilo % shards)
+struct DashMapCounter { map: DashMap<usize, usize> }
 
-// 4. Actor (Crossbeam Channel)
-struct ActorCounter { handles: Vec<crossbeam::channel::Sender<Msg>> } // Sharded Actors
-
-// Benchmark Harness
-fn bench_counters(c: &mut Criterion) {
-    let mut group = c.c.c.benchmark_group("counters");
-    for threads in [1, 2, 4, 8, 16, 32, 64] {
-        group.throughput(Throughput::Elements(1_000_000));
-        
-        // Relaxed Atomic
-        group.bench_with_input(BenchmarkId::new("AtomicRelaxed", threads), &threads, |b, &t| {
-            let c = Arc::new(RelaxedCounter::new(t));
-            b.iter(|| { /* spawn t threads, each inc 1M/t times */ });
-        });
-        // ... repeat for Mutex, DashMap, Actor ...
-    }
-}
+// 4. Actor (Crossbeam Channel): un hilo por shard, estado privado
+enum Msg { Inc, Get(crossbeam::channel::Sender<usize>) }
+struct ActorCounter { handles: Vec<crossbeam::channel::Sender<Msg>> }
 ```
+
+El benchmark completo (`criterion` con `Throughput`, de 1 a 2 × núcleos hilos, y el
+contraejemplo sin padding) está en el proyecto de la
+[Semana 18](section_02.md#proyecto-benchmark-cientifico-del-contador-distribuido).
 **Análisis Requerido en README:**
 1.  Gráfico **Throughput (ops/s) vs Threads**.
 2.  Explicar por qué `Relaxed` + `Padded` gana en write-heavy.
@@ -609,7 +597,7 @@ assert!(matches!(normalizar("con espacio"),  Cow::Owned(_)));
 
 ## ✅ Checklist final del Mes 5 (definition of done: senior Rustacean)
 
-### 1. Arquitectura & Patrones (Refactor Url Shortener v3)
+### 1. Arquitectura & Patrones (Refactor Url Shortener v4)
 - [ ] **Typestate:** `Url<Draft>` -> `Url<Active>` -> `Url<Expired>`. **Imposible** compilar lógica inválida (click en expirado).
 - [ ] **Actor Model:** `ClickCounter` Sharded (N actors) + `PersistenceWriter` Actor. **Cero `Mutex`/`RwLock`/`DashMap` en hot path**.
 - [ ] **DI:** Handlers Axum usan `State<AppState>` con `CounterHandle` (Trait `Counter: Send + Sync`).
@@ -645,7 +633,7 @@ assert!(matches!(normalizar("con espacio"),  Cow::Owned(_)));
 - [ ] **Publicación:** Crate `my-builder` en crates.io con docs.rs construyendo.
 
 #### **C) Monorepo Workspace**
-- [ ] **Estructura:** `core`, `db`, `api`, `cli`, `macros` crates. `Cargo.toml` root con `resolver="2"`, `workspace.dependencies`, `workspace.lints`.
+- [ ] **Estructura:** `core`, `db`, `api`, `cli`, `macros` crates. `Cargo.toml` root con `resolver = "3"`, `workspace.dependencies`, `workspace.lints`.
 - [ ] **Build:** `cargo build --release --workspace` funciona. `cargo test --workspace`.
 - [ ] **CI:** `cargo hack check --each-feature --all-targets`. `cargo deny check` (licenses, bans, sources).
 - [ ] **Docker:** Multi-stage `cargo-chef` para `api` y `cli` independientes (comparten cache deps).

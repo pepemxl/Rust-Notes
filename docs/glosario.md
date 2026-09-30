@@ -88,6 +88,12 @@ ellas en cualquier página.
     dentro de un crate. *Workspace*: varios crates que comparten `Cargo.lock` y `target/`.
     → [Semana 4](chapter_01/section_06.md)
 
+**Macro procedural**
+:   Función que el compilador ejecuta durante la compilación: recibe tokens y devuelve
+    código nuevo (`#[derive(...)]`, atributos, `macro!(...)`). Vive en un crate con
+    `proc-macro = true` y suele usar `syn` y `quote`.
+    → [Semana 20](chapter_05/section_04.md)
+
 **Edición**
 :   Versión del lenguaje que declara cada crate (`edition = "2024"`); permite cambios
     incompatibles sin romper el código existente.
@@ -117,6 +123,21 @@ ellas en cualquier página.
 **Data race**
 :   Dos hilos acceden a la misma memoria a la vez y al menos uno escribe, sin
     sincronización. En Rust seguro es un error de compilación.
+
+**Actor**
+:   Tarea que es dueña exclusiva de su estado y solo se comunica por mensajes (un canal
+    de entrada y, para respuestas, `oneshot`). Alternativa a `Arc<Mutex<T>>`.
+    → [Semana 17](chapter_05/section_01.md)
+
+**Memory ordering**
+:   Garantías de visibilidad entre hilos de una operación atómica: `Relaxed` (solo
+    atomicidad), `Acquire`/`Release` (sincronización punto a punto) y `SeqCst` (orden
+    total). → [Semana 18](chapter_05/section_02.md)
+
+**False sharing**
+:   Hilos que escriben en variables distintas que comparten línea de cache (64 bytes) y
+    se invalidan la cache entre sí. Se evita con `#[repr(align(64))]`.
+    → [Semana 18](chapter_05/section_02.md)
 
 ## Seguridad y bajo nivel
 

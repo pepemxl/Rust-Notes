@@ -71,8 +71,23 @@ aho-corasick = "1"
 encoding_rs = "0.8"
 memchr = "2"
 rayon = "1"
-# Rendimiento
+# Concurrencia y rendimiento (Mes 5)
 criterion = { version = "0.5", features = ["html_reports"] }
+parking_lot = "0.12"
+crossbeam = "0.8"
+smallvec = { version = "1", features = ["union"] }
+arrayvec = "0.7"
+lasso = { version = "0.7", features = ["multi-threaded"] }
+ahash = "0.8"
+wide = "0.7"
+bytemuck = "1"
+num_cpus = "1"
+figment = { version = "0.10", features = ["toml", "env"] }
+tokio-test = "0.4"
+# Macros procedurales (Mes 5): syn/quote se usan fuera de un proc-macro para parsear
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
 # Varios
 bcrypt = "0.16"
 rand = "0.9"

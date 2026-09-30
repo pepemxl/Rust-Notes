@@ -1,0 +1,12 @@
+[package]
+name = "builder"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+builder_macro = { path = "../builder_macro" }
+
+[dev-dependencies]
+trybuild = "1"

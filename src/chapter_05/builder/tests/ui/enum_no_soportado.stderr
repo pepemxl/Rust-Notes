@@ -1,0 +1,5 @@
+error: Builder solo soporta structs con campos nombrados
+ --> tests/ui/enum_no_soportado.rs:4:6
+  |
+4 | enum Malo {
+  |      ^^^^

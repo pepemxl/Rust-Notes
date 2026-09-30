@@ -391,480 +391,196 @@ FLUJO DE COMPILACIÓN CON PROC MACRO
    cargo expand  →  muestra el código que genera el macro
 ```
 
-## Workspace para proc macros
+## Dos crates: el macro y su cara pública
 
 ```bash
-cargo new builder-macro --lib     # el proc-macro puro
-cargo new builder        --lib    # re-exporta y añade helpers
-mkdir builder-tests
+cargo new builder_macro --lib    # el proc-macro puro
+cargo new builder       --lib    # re-exporta el derive y aloja los tests
 ```
 
-**`Cargo.toml` (raíz del workspace):**
+Si ya tienes un workspace (como el de estas notas), basta con que ambos estén en
+`members`. El código completo está en
+[`builder_macro`](https://github.com/pepemxl/Rust-Notes/tree/master/src/chapter_05/builder_macro)
+y [`builder`](https://github.com/pepemxl/Rust-Notes/tree/master/src/chapter_05/builder).
+
+**`builder_macro/Cargo.toml`:**
 
 ```toml
-[workspace]
-resolver = "2"
-members  = ["builder-macro", "builder", "builder-tests"]
-```
-
-**`builder-macro/Cargo.toml`:**
-
-```toml
-[package]
-name    = "builder-macro"
-version = "0.1.0"
-edition = "2024"
-
-[lib]
-proc-macro = true   # CLAVE: este crate es un plugin del compilador
-
-[dependencies]
-syn   = { version = "2", features = ["full"] }
-quote = "1"
-proc-macro2 = "1"
+--8<-- "src/chapter_05/builder_macro/Cargo.toml"
 ```
 
 **`builder/Cargo.toml`:**
 
 ```toml
-[package]
-name    = "builder"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-builder-macro = { path = "../builder-macro" }
-
-[dev-dependencies]
-builder-tests = { path = "../builder-tests" }
+--8<-- "src/chapter_05/builder/Cargo.toml"
 ```
 
-## Implementación: `builder-macro/src/lib.rs`
+## Implementación: `builder_macro/src/lib.rs`
+
+Tres detalles separan este macro de uno de juguete:
+
+- **Genéricos.** `split_for_impl()` da los `<T: Bound>`, `<T>` y `where` en la forma
+  que pide cada posición. Sin eso, `#[derive(Builder)] struct Paginado<T>` genera
+  `impl Paginado { … }` y no compila.
+- **Errores como valores.** Nada de `panic!`: cada problema es un `syn::Error` con el
+  span del código del usuario, y `into_compile_error()` lo convierte en un
+  `compile_error!` que rustc muestra ahí.
+- **Spans en el código generado.** `quote_spanned!` con el span de la expresión de
+  `default = "..."` hace que un error de tipos apunte al literal del atributo, no a
+  una línea invisible del código expandido.
 
 ```rust
-use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{format_ident, quote, quote_spanned};
-use syn::{
-    parse_macro_input, spanned::Spanned,
-    Data, DeriveInput, Expr, Fields, Ident, LitStr, Type,
-};
-
-// ── Estructuras de análisis ────────────────────────────────────────────────
-
-#[derive(Default)]
-struct CampoAttr {
-    default:  Option<DefaultKind>,
-    each:     Option<Ident>,        // #[builder(each = "item")] para Vec
-}
-
-enum DefaultKind {
-    Trait,           // #[builder(default)]       → Default::default()
-    Expr(Box<Expr>), // #[builder(default = "42")]→ expr literal
-}
-
-struct CampoBuilder {
-    ident:   Ident,
-    ty:      Type,
-    attr:    CampoAttr,
-}
-
-// ── Parseo de atributos #[builder(...)] ───────────────────────────────────
-
-fn parsear_attrs(field: &syn::Field) -> syn::Result<CampoAttr> {
-    let mut attr = CampoAttr::default();
-
-    for a in &field.attrs {
-        if !a.path().is_ident("builder") { continue; }
-
-        a.parse_nested_meta(|meta| {
-            // #[builder(default)] o #[builder(default = "expr")]
-            if meta.path.is_ident("default") {
-                if meta.input.peek(syn::Token![=]) {
-                    let value = meta.value()?;
-                    let s: LitStr = value.parse()?;
-                    let expr: Expr = s.parse_with(syn::Expr::parse)
-                        .map_err(|e| syn::Error::new(s.span(), e.to_string()))?;
-                    attr.default = Some(DefaultKind::Expr(Box::new(expr)));
-                } else {
-                    attr.default = Some(DefaultKind::Trait);
-                }
-                return Ok(());
-            }
-
-            // #[builder(each = "método")]
-            if meta.path.is_ident("each") {
-                let value = meta.value()?;
-                let s: LitStr = value.parse()?;
-                attr.each = Some(Ident::new(&s.value(), s.span()));
-                return Ok(());
-            }
-
-            Err(meta.error(
-                "atributo builder desconocido; se esperaba `default` o `each`"
-            ))
-        })?;
-    }
-
-    Ok(attr)
-}
-
-// ── Helpers de tipo ────────────────────────────────────────────────────────
-
-/// Devuelve el tipo interno T de Vec<T>, o None si no es Vec
-fn tipo_interior_vec(ty: &Type) -> Option<&Type> {
-    let Type::Path(tp) = ty else { return None; };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "Vec" { return None; }
-    let syn::PathArguments::AngleBracketed(ref args) = seg.arguments else { return None; };
-    args.args.iter().find_map(|a| {
-        if let syn::GenericArgument::Type(t) = a { Some(t) } else { None }
-    })
-}
-
-// ── Entry point del proc-macro ─────────────────────────────────────────────
-
-#[proc_macro_derive(Builder, attributes(builder))]
-pub fn derive_builder(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-
-    match implementar_builder(&input) {
-        Ok(ts)  => ts.into(),
-        Err(e)  => e.into_compile_error().into(),
-    }
-}
-
-fn implementar_builder(input: &DeriveInput) -> syn::Result<TokenStream2> {
-    let nombre  = &input.ident;
-    let vis     = &input.vis;
-    let nombre_builder = format_ident!("{}Builder", nombre);
-
-    // Solo soportamos structs con campos nombrados
-    let Data::Struct(data_struct) = &input.data else {
-        return Err(syn::Error::new_spanned(
-            nombre,
-            "Builder solo soporta structs con campos nombrados",
-        ));
-    };
-    let Fields::Named(fields_named) = &data_struct.fields else {
-        return Err(syn::Error::new_spanned(
-            nombre,
-            "Builder requiere campos nombrados (no tuple structs)",
-        ));
-    };
-
-    // Parsear todos los campos con sus atributos
-    let campos: Vec<CampoBuilder> = fields_named.named.iter()
-        .map(|f| {
-            let attr = parsear_attrs(f)?;
-            Ok(CampoBuilder {
-                ident: f.ident.clone().unwrap(),
-                ty:    f.ty.clone(),
-                attr,
-            })
-        })
-        .collect::<syn::Result<Vec<_>>>()?;
-
-    // ── Generar campos del Builder struct ────────────────────────────────
-    let campos_struct: Vec<TokenStream2> = campos.iter().map(|c| {
-        let ident = &c.ident;
-        let ty    = &c.ty;
-        if c.attr.each.is_some() {
-            // Campos con `each`: el builder acumula un Vec
-            quote! { #ident: #ty, }
-        } else {
-            // Campos normales: Option<T>
-            quote! { #ident: ::core::option::Option<#ty>, }
-        }
-    }).collect();
-
-    // ── Generar valor por defecto para cada campo (para Default impl) ───
-    let defaults_struct: Vec<TokenStream2> = campos.iter().map(|c| {
-        let ident = &c.ident;
-        if c.attr.each.is_some() {
-            quote! { #ident: ::std::vec::Vec::new(), }
-        } else {
-            quote! { #ident: ::core::option::Option::None, }
-        }
-    }).collect();
-
-    // ── Generar setters ──────────────────────────────────────────────────
-    let setters: Vec<TokenStream2> = campos.iter().map(|c| {
-        let ident = &c.ident;
-        let ty    = &c.ty;
-        let span  = ident.span();
-
-        if let Some(each_ident) = &c.attr.each {
-            // each: setter que añade UN elemento (no reemplaza todo el Vec)
-            let inner = tipo_interior_vec(ty).map_or_else(
-                || quote_spanned!(span=> compile_error!("`each` requiere Vec<T>")),
-                |t| quote! { #t },
-            );
-            quote_spanned! { span=>
-                pub fn #each_ident(mut self, valor: #inner) -> Self {
-                    self.#ident.push(valor);
-                    self
-                }
-            }
-        } else {
-            // setter normal: envuelve en Some
-            quote_spanned! { span=>
-                pub fn #ident(mut self, valor: #ty) -> Self {
-                    self.#ident = ::core::option::Option::Some(valor);
-                    self
-                }
-            }
-        }
-    }).collect();
-
-    // ── Generar cuerpo de build() ────────────────────────────────────────
-    let build_campos: Vec<TokenStream2> = campos.iter().map(|c| {
-        let ident = &c.ident;
-        let span  = ident.span();
-
-        if c.attr.each.is_some() {
-            // Vec se mueve directamente
-            quote_spanned! { span=> #ident: self.#ident, }
-        } else {
-            match &c.attr.default {
-                Some(DefaultKind::Trait) => {
-                    quote_spanned! { span=>
-                        #ident: self.#ident.unwrap_or_default(),
-                    }
-                }
-                Some(DefaultKind::Expr(expr)) => {
-                    quote_spanned! { span=>
-                        #ident: self.#ident.unwrap_or_else(|| #expr),
-                    }
-                }
-                None => {
-                    // Campo requerido: Err si no fue configurado
-                    let msg = format!("campo `{}` es requerido", ident);
-                    quote_spanned! { span=>
-                        #ident: self.#ident.ok_or(#msg)?,
-                    }
-                }
-            }
-        }
-    }).collect();
-
-    // ── Código final generado ────────────────────────────────────────────
-    Ok(quote! {
-        // Builder struct
-        #vis struct #nombre_builder {
-            #(#campos_struct)*
-        }
-
-        // Default para #nombre_builder
-        impl ::core::default::Default for #nombre_builder {
-            fn default() -> Self {
-                Self {
-                    #(#defaults_struct)*
-                }
-            }
-        }
-
-        // Métodos del Builder
-        impl #nombre_builder {
-            #(#setters)*
-
-            pub fn build(self) -> ::core::result::Result<#nombre, ::std::string::String> {
-                ::core::result::Result::Ok(#nombre {
-                    #(#build_campos)*
-                })
-            }
-        }
-
-        // Método estático builder() en la struct original
-        impl #nombre {
-            pub fn builder() -> #nombre_builder {
-                #nombre_builder::default()
-            }
-        }
-    })
-}
+--8<-- "src/chapter_05/builder_macro/src/lib.rs"
 ```
 
-## Re-export y uso: `builder/src/lib.rs`
+## Re-export: `builder/src/lib.rs`
+
+Un crate `proc-macro = true` solo puede exportar macros. El crate `builder` es el que
+dependen los usuarios; sus doctests muestran el uso y, con ` ```compile_fail `, que
+un `default` del tipo equivocado no compila.
 
 ```rust
-// Re-exporta el derive macro para que los usuarios solo dependan de `builder`
-pub use builder_macro::Builder;
-
-// Aquí podrías añadir tipos helpers (BuilderError, etc.)
+--8<-- "src/chapter_05/builder/src/lib.rs"
 ```
 
-## Ejemplo de uso: `builder-tests/src/lib.rs`
+## Tests: `builder/tests/derive.rs`
 
 ```rust
-use builder::Builder;
-
-#[derive(Debug, PartialEq, Builder)]
-struct Configuracion {
-    // Campo requerido: build() falla si no se llama a .host()
-    host: String,
-
-    // Campo opcional con valor por defecto literal
-    #[builder(default = "8080")]
-    puerto: u16,
-
-    // Campo opcional que usa Default::default() del tipo
-    #[builder(default)]
-    reintentos: u32,  // → 0u32
-
-    // Vec acumulativo: se llama .cabecera() varias veces
-    #[builder(each = "cabecera")]
-    cabeceras: Vec<String>,
-}
-
-#[test]
-fn construccion_completa() {
-    let cfg = Configuracion::builder()
-        .host("api.ejemplo.com".to_string())
-        .puerto(9090)
-        .reintentos(3)
-        .cabecera("X-Request-ID: abc".to_string())
-        .cabecera("Accept: application/json".to_string())
-        .build()
-        .unwrap();
-
-    assert_eq!(cfg.host,       "api.ejemplo.com");
-    assert_eq!(cfg.puerto,     9090);
-    assert_eq!(cfg.reintentos, 3);
-    assert_eq!(cfg.cabeceras.len(), 2);
-}
-
-#[test]
-fn valores_por_defecto() {
-    let cfg = Configuracion::builder()
-        .host("localhost".to_string())
-        .build()
-        .unwrap();
-
-    assert_eq!(cfg.puerto,     8080);     // default = "8080"
-    assert_eq!(cfg.reintentos, 0);        // Default::default()
-    assert!(cfg.cabeceras.is_empty());    // Vec vacío
-}
-
-#[test]
-fn campo_requerido_faltante() {
-    let resultado = Configuracion::builder().build();
-    assert!(resultado.is_err());
-    assert!(resultado.unwrap_err().contains("host"));
-}
-
-#[test]
-fn each_acumula_elementos() {
-    let cfg = Configuracion::builder()
-        .host("x.com".to_string())
-        .cabecera("A: 1".to_string())
-        .cabecera("B: 2".to_string())
-        .cabecera("C: 3".to_string())
-        .build()
-        .unwrap();
-
-    assert_eq!(cfg.cabeceras, vec!["A: 1", "B: 2", "C: 3"]);
-}
-
-// ── Builder funciona con tipos genéricos ──────────────────────────────────
-
-#[derive(Debug, Builder)]
-struct Paginado<T> {
-    datos: Vec<T>,
-    #[builder(default = "1")]
-    pagina: usize,
-    #[builder(default = "20")]
-    por_pagina: usize,
-}
-
-#[test]
-fn builder_con_genericos() {
-    let p = Paginado::<String>::builder()
-        .datos(vec!["a".to_string(), "b".to_string()])
-        .pagina(3)
-        .build()
-        .unwrap();
-
-    assert_eq!(p.pagina, 3);
-    assert_eq!(p.por_pagina, 20);  // default
-}
+--8<-- "src/chapter_05/builder/tests/derive.rs"
 ```
 
 ## Tests de errores de compilación con `trybuild`
 
-`trybuild` verifica que cierto código **no compila** y que el mensaje de error
-es exactamente el esperado:
-
-```bash
-cargo add --dev trybuild
-```
+`trybuild` compila cada archivo de `tests/ui/`, exige que **falle** y compara el
+error con el `.stderr` de al lado. Así, los mensajes del macro también tienen tests
+de regresión.
 
 **`tests/compile_fail.rs`:**
 
 ```rust
-#[test]
-fn compile_fail_tests() {
-    // Ejecuta todos los archivos .rs en tests/ui/
-    // y verifica que fallan con el mensaje en el .stderr correspondiente
-    let t = trybuild::TestCases::new();
-    t.compile_fail("tests/ui/*.rs");
-}
+--8<-- "src/chapter_05/builder/tests/compile_fail.rs"
 ```
 
-**`tests/ui/campo_invalido.rs`:**
+**`tests/ui/atributo_desconocido.rs`** y su `.stderr`, generado con
+`TRYBUILD=overwrite cargo test` y revisado a mano:
 
 ```rust
+--8<-- "src/chapter_05/builder/tests/ui/atributo_desconocido.rs"
+```
+
+```text
+--8<-- "src/chapter_05/builder/tests/ui/atributo_desconocido.stderr"
+```
+
+**`tests/ui/each_sin_vec.rs`**: el error señala el tipo del campo, que es lo que hay
+que cambiar.
+
+```rust
+--8<-- "src/chapter_05/builder/tests/ui/each_sin_vec.rs"
+```
+
+```text
+--8<-- "src/chapter_05/builder/tests/ui/each_sin_vec.stderr"
+```
+
+**`tests/ui/enum_no_soportado.rs`**:
+
+```text
+--8<-- "src/chapter_05/builder/tests/ui/enum_no_soportado.stderr"
+```
+
+!!! tip "Solo errores del macro en `trybuild`"
+
+    Los `.stderr` se comparan byte a byte. Los mensajes que emite **tu** macro son
+    estables; los de rustc (por ejemplo, un `E0308` por tipos) cambian entre
+    versiones y romperían el test en el CI que prueba con 1.85 y con stable. Para esos
+    casos basta un doctest ` ```compile_fail `, que solo exige que no compile.
+
+Así se ve el span correcto en acción. Este ejemplo del crate:
+
+```rust
+// ❌ NO COMPILA
 use builder::Builder;
 
 #[derive(Builder)]
-struct Malo {
-    #[builder(atributo_inventado)]  // ← debe fallar
-    campo: String,
+struct Servidor {
+    #[builder(default = "\"ochenta\"")]
+    puerto: u16,
 }
 
 fn main() {}
 ```
 
-**`tests/ui/campo_invalido.stderr`:**
+produce un error que subraya el literal del atributo, no el `build()` generado que
+el usuario nunca ve:
 
-```
-error: atributo builder desconocido; se esperaba `default` o `each`
- --> tests/ui/campo_invalido.rs:5:14
+```text
+error[E0308]: mismatched types
+ --> src/chapter_05/builder/examples/tipo.rs:5:25
   |
-5 |     #[builder(atributo_inventado)]
-  |               ^^^^^^^^^^^^^^^^^^
+5 |     #[builder(default = "\"ochenta\"")]
+  |                         ^^^^^^^^^^^^^ expected `u16`, found `&str`
 ```
 
 ### Debugging con `cargo expand`
 
 ```bash
-# Instalar
 cargo install cargo-expand
+cargo expand --test derive     # expande los macros de tests/derive.rs
+```
 
-# Ver qué genera el macro para tu struct
-cargo expand --bin mi-app 2>/dev/null | grep -A 50 "impl ConfiguracionBuilder"
+Para un `Configuracion` con `host`, `puerto` (`default = "8080"`) y `cabeceras`
+(`each = "cabecera"`), el macro genera esto (salida de
+`cargo +nightly rustc -- -Zunpretty=expanded`, que es lo que `cargo expand` ejecuta y
+luego formatea). La struct original queda igual, sin los atributos `#[builder]`; el
+resto es código nuevo:
 
-# Salida (ejemplo para Configuracion):
+```rust
+pub struct Configuracion {
+    host: String,
+    puerto: u16,
+    cabeceras: Vec<String>,
+}
+/// Builder de [`Configuracion`], generado por `#[derive(Builder)]`.
+pub struct ConfiguracionBuilder {
+    host: ::core::option::Option<String>,
+    puerto: ::core::option::Option<u16>,
+    cabeceras: Vec<String>,
+}
+impl ::core::default::Default for ConfiguracionBuilder {
+    fn default() -> Self {
+        Self {
+            host: ::core::option::Option::None,
+            puerto: ::core::option::Option::None,
+            cabeceras: ::std::vec::Vec::new(),
+        }
+    }
+}
 impl ConfiguracionBuilder {
     pub fn host(mut self, valor: String) -> Self {
-        self.host = Some(valor);
+        self.host = ::core::option::Option::Some(valor);
         self
     }
     pub fn puerto(mut self, valor: u16) -> Self {
-        self.puerto = Some(valor);
+        self.puerto = ::core::option::Option::Some(valor);
         self
     }
     pub fn cabecera(mut self, valor: String) -> Self {
         self.cabeceras.push(valor);
         self
     }
-    pub fn build(self) -> Result<Configuracion, String> {
-        Ok(Configuracion {
-            host: self.host.ok_or("campo `host` es requerido")?,
-            puerto: self.puerto.unwrap_or_else(|| 8080),
-            reintentos: self.reintentos.unwrap_or_default(),
-            cabeceras: self.cabeceras,
-        })
+    pub fn build(self)
+        -> ::core::result::Result<Configuracion, ::std::string::String> {
+        ::core::result::Result::Ok(Configuracion {
+                host: self.host.ok_or("falta el campo requerido `host`")?,
+                puerto: self.puerto.unwrap_or_else(|| 8080),
+                cabeceras: self.cabeceras,
+            })
+    }
+}
+impl Configuracion {
+    pub fn builder() -> ConfiguracionBuilder {
+        ::core::default::Default::default()
     }
 }
 ```
@@ -922,7 +638,7 @@ PROHIBIDO:
 
 ```toml
 [workspace]
-resolver = "2"   # OBLIGATORIO: feature unification correcta en Rust >= 1.51
+resolver = "3"   # el de la edición 2024 (Rust 1.84+): "2" + resolución consciente de rust-version
 members  = [
     "crates/core",
     "crates/db",
@@ -935,7 +651,7 @@ members  = [
 # Los crates del workspace heredan con: serde.workspace = true
 [workspace.dependencies]
 tokio        = { version = "1",   features = ["full"] }
-axum         = "0.7"
+axum         = "0.8"
 sqlx         = { version = "0.8", features = ["postgres", "runtime-tokio", "tls-rustls", "uuid", "chrono"] }
 serde        = { version = "1",   features = ["derive"] }
 serde_json   = "1"
@@ -1055,6 +771,24 @@ pub trait RepositorioUrls: Send + Sync + 'static {
     async fn listar(&self, limite: u32) -> Result<Vec<UrlCorta>, ErrorDominio>;
 }
 
+// Un Arc<R> también es un repositorio. Gracias a esto, `ServicioUrls` (genérico)
+// acepta `Arc<dyn RepositorioUrls>` cuando la app elige el repositorio en runtime.
+#[async_trait]
+impl<R: RepositorioUrls + ?Sized> RepositorioUrls for std::sync::Arc<R> {
+    async fn guardar(&self, url: &UrlCorta) -> Result<(), ErrorDominio> {
+        (**self).guardar(url).await
+    }
+    async fn buscar_por_codigo(&self, codigo: &str) -> Result<UrlCorta, ErrorDominio> {
+        (**self).buscar_por_codigo(codigo).await
+    }
+    async fn incrementar_clicks(&self, codigo: &str) -> Result<u64, ErrorDominio> {
+        (**self).incrementar_clicks(codigo).await
+    }
+    async fn listar(&self, limite: u32) -> Result<Vec<UrlCorta>, ErrorDominio> {
+        (**self).listar(limite).await
+    }
+}
+
 // ── Lógica de negocio pura ────────────────────────────────────────────────
 
 pub fn validar_codigo(codigo: &str) -> Result<(), ErrorDominio> {
@@ -1085,6 +819,25 @@ impl<R: RepositorioUrls> ServicioUrls<R> {
         let url = self.repo.buscar_por_codigo(codigo).await?;
         self.repo.incrementar_clicks(codigo).await?;
         Ok(url.target)
+    }
+}
+
+// Tests de arquitectura: el dominio se prueba sin base de datos ni HTTP
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validar_codigo_correcto() {
+        assert!(validar_codigo("mi-url").is_ok());
+        assert!(validar_codigo("abc123").is_ok());
+    }
+
+    #[test]
+    fn validar_codigo_incorrecto() {
+        assert!(validar_codigo("").is_err());
+        assert!(validar_codigo("con espacio").is_err());
+        assert!(validar_codigo(&"x".repeat(33)).is_err());
     }
 }
 ```
@@ -1288,61 +1041,6 @@ cargo deny check
 
 ---
 
-## Tests comunes a las tres rutas
-
-```rust
-// tests/integracion.rs — aplicable a cualquier ruta
-
-// RUTA B: verificar que el macro genera código correcto
-#[cfg(test)]
-mod proc_macro_tests {
-    use builder::Builder;
-
-    #[derive(Builder, Debug, PartialEq)]
-    struct Ejemplo {
-        requerido: String,
-        #[builder(default = "42")]
-        opcional: u32,
-    }
-
-    #[test]
-    fn build_exitoso() {
-        let e = Ejemplo::builder()
-            .requerido("hola".to_string())
-            .build()
-            .unwrap();
-        assert_eq!(e.requerido, "hola");
-        assert_eq!(e.opcional,  42);
-    }
-
-    #[test]
-    fn build_falla_sin_requerido() {
-        let res = Ejemplo::builder().build();
-        assert!(res.is_err());
-        assert!(res.unwrap_err().contains("requerido"));
-    }
-}
-
-// RUTA C: verificar que el core no tiene dependencias de I/O
-#[cfg(test)]
-mod arquitectura_tests {
-    #[test]
-    fn validar_codigo_correcto() {
-        assert!(mi_core::validar_codigo("mi-url").is_ok());
-        assert!(mi_core::validar_codigo("abc123").is_ok());
-    }
-
-    #[test]
-    fn validar_codigo_incorrecto() {
-        assert!(mi_core::validar_codigo("").is_err());
-        assert!(mi_core::validar_codigo("con espacio").is_err());
-        assert!(mi_core::validar_codigo(&"x".repeat(33)).is_err());
-    }
-}
-```
-
----
-
 ## ✅ Checklist de la Semana 20
 
 ### Checklist común (independiente de la ruta)
@@ -1380,15 +1078,17 @@ mod arquitectura_tests {
 - [ ] `cargo expand` muestra el código generado correctamente. Revisé la
   expansión para al menos un struct complejo.
 - [ ] Tests de `trybuild` verifican que código inválido produce el error
-  esperado (al menos 2 casos compile-fail).
+  esperado (al menos 3 casos compile-fail, con mensajes emitidos por el macro).
 - [ ] 5 tests de corrección pasan: construcción completa, valores por
   defecto, campo requerido faltante, `each` acumulativo, struct genérico.
+- [ ] Un `default` del tipo equivocado produce un error que apunta al literal del
+  atributo (span correcto), comprobado con un doctest `compile_fail`.
 - [ ] El macro está en un crate separado (`proc-macro = true`). El crate
   de usuario re-exporta el derive.
 
 ### Ruta C: Monorepo Workspace
 
-- [ ] `[workspace]` con `resolver = "2"`. Todos los crates del equipo
+- [ ] `[workspace]` con `resolver = "3"` (edición 2024). Todos los crates del equipo
   están en `members`.
 - [ ] `[workspace.dependencies]` centraliza todas las versiones.
   Ningún crate duplica una versión diferente de una dependencia compartida.

@@ -146,7 +146,8 @@ assert_cmd     = "2"
 ```rust
 // crates/server/src/config.rs
 
-use figment::{providers::{Env, Format, Toml}, Figment};
+// `Env` de figment se renombra: el nombre `Env` es de nuestro enum de entornos
+use figment::{providers::{Env as VariablesEntorno, Format, Toml}, Figment};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -174,7 +175,7 @@ impl Config {
     pub fn load() -> anyhow::Result<Self> {
         let config: Config = Figment::new()
             .merge(Toml::file("linkmetrics.toml"))
-            .merge(Env::prefixed("LM_"))
+            .merge(VariablesEntorno::prefixed("LM_"))
             .extract()?;
         Ok(config)
     }

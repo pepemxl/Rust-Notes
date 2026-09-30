@@ -154,22 +154,37 @@ criterion_main!(benches);
 
 ### Interpretar la salida de criterion
 
-```text
-running bench "parsers/implementacion_a/100000"
-                        time:   [42.3 µs 42.8 µs 43.4 µs]
-                              ↑      ↑      ↑
-                           lower   mean   upper (intervalo de confianza 95%)
-                        thrpt:  [2.1745 GiB/s 2.2001 GiB/s 2.2284 GiB/s]
-                        change: [-18.4% -17.2% -16.0%] (p = 0.00 < 0.05)
-                        Performance has improved.
+Salida real de `cargo bench -- parser/despues` del proyecto de esta semana,
+ejecutado por segunda vez:
 
-Glosario:
-- "time": tiempo por iteración (lower/mean/upper del 95% CI)
-- "thrpt": throughput calculado de Throughput::Bytes(N)
-- "change": comparación con baseline. p < 0.05 = estadísticamente significativo.
-- "Performance has improved" / "Performance has regressed"
-- Outliers: criterion los detecta y avisa si distorsionan la medida
+```text
+parser/despues          time:   [13.411 ms 13.507 ms 13.668 ms]
+                        thrpt:  [696.34 MiB/s 704.64 MiB/s 709.71 MiB/s]
+                 change:
+                        time:   [-10.041% -8.7968% -7.4036%] (p = 0.00 < 0.05)
+                        thrpt:  [+7.9956% +9.6453% +11.162%]
+                        Performance has improved.
+Found 4 outliers among 100 measurements (4.00%)
+  2 (2.00%) high mild
+  2 (2.00%) high severe
 ```
+
+- **`time`**: tiempo por iteración como intervalo de confianza del 95 %
+  (límite inferior, estimación, límite superior).
+- **`thrpt`**: el mismo dato como throughput, porque el grupo declaró
+  `Throughput::Bytes`.
+- **`change`**: comparación con la ejecución anterior guardada en
+  `target/criterion/`. `p < 0.05` significa que la diferencia es estadísticamente
+  significativa.
+- **Outliers**: muestras anómalas detectadas y clasificadas (leves o severas).
+
+!!! warning "Significativo no es lo mismo que real"
+
+    Entre esa ejecución y la anterior **no cambió ni una línea de código**. El -8.8 %
+    viene de la máquina: frecuencia de la CPU, temperatura, otros procesos. Por eso un
+    cambio menor al ~10 % en un portátil no demuestra nada; repite la medición, fija la
+    carga de la máquina y compara contra una baseline con nombre
+    (`--save-baseline` / `--baseline`) medida en las mismas condiciones.
 
 ---
 
@@ -252,27 +267,12 @@ heaptrack_gui heaptrack.logparser.*.gz
 heaptrack_print heaptrack.logparser.*.gz | head -50
 ```
 
-```text
-SALIDA TÍPICA DE heaptrack_print:
-
-PEAK MEMORY CONSUMPTION: 128.5 MB
-TOTAL ALLOCATIONS:       4,821,033
-TOTAL TEMPORARY:         4,820,891 (99.9% temporales — SEÑAL DE ALERTA)
-
-Top allocations by count:
-  alloc_count  bytes    location
-  2,400,000    57.6 MB  logparser::parser::nginx::parsear_linea:382
-                        → String::from() para cada campo ← HOTSPOT
-  1,200,000    28.8 MB  logparser::aggregate::Estadisticas::registrar:95
-                        → HashMap::insert() con String::clone() ← HOTSPOT
-    400,000     9.6 MB  logparser::output::imprimir_entrada:45
-                        → serde_json::to_string() por línea ← HOTSPOT
-
-DIAGNÓSTICO:
-• 2.4 M allocaciones de String por línea parseada → usar Cow<str>
-• 1.2 M clone de String en agregación → usar String Interning (lasso)
-• 400 K serde_json::to_string → batch + write! a buffer
-```
+El informe ordena las ubicaciones por número de allocaciones. Lo que hay que buscar
+es la proporción de allocaciones **temporales** (se liberan casi de inmediato) y las
+líneas que allocan **una vez por elemento procesado**: un `String::from` por campo
+parseado, un `clone()` de clave al insertar en un `HashMap`, un
+`serde_json::to_string` por línea de salida. En el proyecto de esta semana las
+medimos con un test en lugar de heaptrack, y salen exactamente esas tres.
 
 ```bash
 # dhat (parte de Valgrind): más lento pero más detallado
@@ -352,24 +352,18 @@ fn usar_fastmap() -> FastMap<String, u64> {
     mapa
 }
 
-// También disponible con ahash::HashMap (wrapper directo):
-use ahash::HashMap as AHashMap;
+// También disponible como AHashMap (wrapper con ::new(); `ahash::HashMap` es solo un
+// alias de std::collections::HashMap con otro hasher y no tiene ::new()):
+use ahash::AHashMap;
 let mut mapa: AHashMap<String, u64> = AHashMap::new();
 
 // ⚠️ NO uses ahash para claves controladas por atacantes externos
 //    (no es seguro contra HashDoS). Usa solo en mapas internos.
 ```
 
-```text
-BENCHMARK: HashMap::insert() + lookup — 1M operaciones
-
-hasher          insert (ns/op)   lookup (ns/op)   vs SipHash
-─────────────────────────────────────────────────────────────
-SipHash-1-3           187              142           1.0x
-ahash                  73               58           2.6x
-foldhash               68               54           2.8x
-fxhash                 62               48           3.0x  (no DoS safe)
-```
+Cuánto se gana depende del tipo de clave y del tamaño del mapa: mídelo en tu caso.
+En la agregación del proyecto de esta semana, `ahash` + interning aparece medido
+contra `HashMap<String, _>` con SipHash.
 
 ### 5.2 `SmallVec` y `ArrayVec`: evitar allocaciones para colecciones pequeñas
 
@@ -394,13 +388,11 @@ fn parsear_headers(input: &str) -> SmallVec<[&str; 8]> {
 // ArrayVec<T, N>: capacidad fija, NUNCA alloca
 // Panics si push() excede N (usa try_push para Result)
 fn cinco_mas_frecuentes(conteos: &[(String, u64)]) -> ArrayVec<&str, 5> {
-    let mut top: ArrayVec<&str, 5> = ArrayVec::new();
-    let mut ordenados = conteos.to_vec();
+    // Ordenamos referencias, no copias: los &str del resultado apuntan a `conteos`
+    // (con `conteos.to_vec()` apuntarían a un Vec local y no compilaría).
+    let mut ordenados: Vec<&(String, u64)> = conteos.iter().collect();
     ordenados.sort_unstable_by(|a, b| b.1.cmp(&a.1));
-    for (k, _) in ordenados.iter().take(5) {
-        let _ = top.try_push(k.as_str()); // silencioso si ya hay 5
-    }
-    top
+    ordenados.iter().take(5).map(|(k, _)| k.as_str()).collect() // take(5): nunca excede N
 }
 
 // ¿Cuándo usar cuál?
@@ -501,7 +493,7 @@ use ahash::AHashMap;
 type ConteoRutas = AHashMap<Spur, u64>;
 ```
 
-### 5.5 `#[inline]`, `#[cold]` y `#[likely]`
+### 5.5 `#[inline]`, `#[cold]` y pistas de rama
 
 ```rust
 // #[inline]: sugiere al compilador que inline la función
@@ -528,15 +520,8 @@ fn reportar_error_parse(linea: &str, pos: usize) -> String {
     format!("error al parsear en columna {pos}: {:?}", &linea[..pos.min(40)])
 }
 
-// #[cold] en variantes de error de enums:
-pub enum ResultadoParse<T> {
-    Ok(T),
-    #[cold]        // esta variante raramente ocurre en producción
-    Error(String),
-}
-
-// core::hint::likely / unlikely (nightly):
-// En stable, usa ramas con #[cold] en el camino unlikely como workaround
+// core::hint::likely / unlikely existen solo en nightly (#![feature(likely_unlikely)]).
+// En stable, el truco equivalente: llamar a una función #[cold] en la rama rara
 fn procesar_byte(b: u8) -> u8 {
     if b == 0 {
         // Caso raro: marcar la función de manejo como #[cold]
@@ -555,8 +540,10 @@ fn manejar_nul(_: u8) -> u8 { 0 }
 ```rust
 // [dependencies]
 // wide = "0.7"
+// bytemuck = "1"
 
-use wide::{f32x8, u32x8, CmpLt};
+use bytemuck::cast;
+use wide::{f32x8, u32x8, CmpLe};
 
 /// Calcular iteraciones de Mandelbrot para 8 píxeles simultáneamente.
 /// En lugar de el bucle escalar de la Semana 15, procesamos 8 puntos
@@ -575,8 +562,12 @@ pub fn mandelbrot_simd_x8(
     for _ in 0..max_iter {
         let zx2 = zx * zx;
         let zy2 = zy * zy;
-        // Máscara: lanes donde |z|² < 4 (el punto sigue "dentro")
-        let dentro: u32x8 = (zx2 + zy2).cmp_lt(cuatro).into();
+        // Máscara: lanes donde |z|² ≤ 4 (el punto sigue "dentro"; escapa si |z| > 2,
+        // igual que la versión escalar. Con `<` los puntos con |z|² = 4 exacto
+        // escaparían una iteración antes)
+        // cmp_le devuelve una máscara f32x8 (todos los bits a 1 donde se cumple);
+        // cast la reinterpreta como u32x8 sin convertir valores
+        let dentro: u32x8 = cast((zx2 + zy2).cmp_le(cuatro));
         if dentro == u32x8::ZERO { break; }  // todos escaparon
         iters += dentro & uno;
         let nuevo_zy = f32x8::splat(2.0) * zx * zy + cy;
@@ -584,7 +575,7 @@ pub fn mandelbrot_simd_x8(
         zy = nuevo_zy;
     }
 
-    iters.into()
+    iters.to_array()
 }
 
 /// Versión escalar equivalente (para comparar en benchmark)
@@ -648,559 +639,214 @@ fn escribir_json_lines<T: Serialize>(items: &[T]) -> io::Result<()> {
 
 ## Proyecto: Log Parser v2 — tres optimizaciones documentadas
 
-Tomamos el `logparser` de la Semana 16 y aplicamos la metodología MUOV
-para obtener speedup medible y documentado.
+Tomamos el `logparser` de la Semana 16 y aplicamos la metodología MUOV a sus tres
+fases: parsear, agregar y escribir. Cada optimización **convive con su versión
+"antes"** en el mismo crate: así criterion puede compararlas lado a lado y los tests
+pueden comprobar que ambas dan exactamente el mismo resultado. El código completo
+está en
+[`logparser_v2`](https://github.com/pepemxl/Rust-Notes/tree/master/src/chapter_05/logparser_v2).
 
 ### Estructura
 
-```
+```text
 logparser_v2/
 ├── Cargo.toml
 ├── src/
-│   ├── lib.rs          ← implementaciones base y optimizadas
-│   ├── parser.rs       ← parser nginx (Cow en campos)
-│   ├── aggregate.rs    ← ahash + lasso
-│   └── output.rs       ← BufWriter
-└── benches/
-    └── optimizaciones.rs
+│   ├── lib.rs          ← módulos + generador de líneas de prueba
+│   ├── main.rs         ← CLI: stdin → JSON Lines (con --antes usa la versión lenta)
+│   ├── parser.rs       ← OPT-01: Cow / &str en lugar de String
+│   ├── aggregate.rs    ← OPT-02: ahash + lasso
+│   └── output.rs       ← OPT-03: BufWriter + to_writer
+├── benches/
+│   └── optimizaciones.rs
+└── tests/
+    ├── regresion.rs    ← antes y después producen lo mismo
+    └── allocaciones.rs ← cuenta allocaciones con un allocator propio
 ```
 
 ### `Cargo.toml`
 
 ```toml
-[package]
-name    = "logparser-v2"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-nom        = "8"
-ahash      = "0.8"
-lasso      = { version = "0.6", features = ["multi-threaded"] }
-smallvec   = { version = "1", features = ["union"] }
-serde      = { version = "1", features = ["derive"] }
-serde_json = "1"
-wide       = "0.7"
-
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-
-[[bench]]
-name    = "optimizaciones"
-harness = false
-
-[profile.release]
-debug         = 1   # conservar símbolos para flamegraph
-lto           = true
-codegen-units = 1
+--8<-- "src/chapter_05/logparser_v2/Cargo.toml"
 ```
 
-### `src/parser.rs` — optimización 1: Cow en campos frecuentes
+### `src/lib.rs`
+
+Los datos de prueba importan tanto como el código: con una ruta distinta por línea,
+el interning no ahorraría nada. El generador imita un log real, con pocas rutas y
+pocas IPs que se repiten miles de veces.
 
 ```rust
-use nom::{
-    bytes::complete::{tag, take_until, take_while1},
-    character::complete::{char, digit1, space1},
-    combinator::{map_res, opt},
-    sequence::{delimited, terminated},
-    IResult, Parser,
-};
-use std::borrow::Cow;
-
-// ANTES (Semana 16): todos los campos son String (always allocate)
-#[derive(Debug)]
-pub struct EntradaAntes {
-    pub ip:      String,      // alloca siempre
-    pub metodo:  String,      // alloca siempre
-    pub ruta:    String,      // alloca siempre
-    pub estado:  u16,
-    pub bytes:   Option<u64>,
-}
-
-// DESPUÉS: campos de alta frecuencia como &str (zero-copy del input)
-// Solo alloamos si el campo necesita transformación (raro en logs nginx)
-#[derive(Debug)]
-pub struct EntradaDespues<'a> {
-    pub ip:      &'a str,     // referencia al input: cero alloc
-    pub metodo:  &'a str,     // cero alloc
-    pub ruta:    Cow<'a, str>,// cero alloc si sin %-encoding; alloca si lo hay
-    pub estado:  u16,
-    pub bytes:   Option<u64>,
-}
-
-fn campo_ip(i: &str) -> IResult<&str, &str> {
-    take_while1(|c: char| c.is_ascii_digit() || c == '.' || c == ':').parse(i)
-}
-
-fn campo_metodo(i: &str) -> IResult<&str, &str> {
-    take_while1(|c: char| c.is_ascii_uppercase()).parse(i)
-}
-
-fn campo_ruta(i: &str) -> IResult<&str, Cow<str>> {
-    let (i, ruta) = take_while1(|c: char| c != ' ').parse(i)?;
-    // Solo decodificamos si hay caracteres codificados
-    if ruta.contains('%') {
-        Ok((i, Cow::Owned(decodificar_url(ruta))))
-    } else {
-        Ok((i, Cow::Borrowed(ruta)))
-    }
-}
-
-fn decodificar_url(s: &str) -> String {
-    // Simplificado: en producción usar percent-encoding crate
-    s.replace("%20", " ").replace("%2F", "/").replace("%3F", "?")
-}
-
-pub fn parsear_linea_optimizado(input: &str) -> IResult<&str, EntradaDespues> {
-    let (i, ip)     = terminated(campo_ip, space1).parse(input)?;
-    let (i, _)      = terminated(take_while1(|c: char| c != ' '), space1).parse(i)?;
-    let (i, _)      = terminated(take_while1(|c: char| c != ' '), space1).parse(i)?;
-    let (i, _)      = terminated(delimited(char('['), take_until("]"), char(']')), space1).parse(i)?;
-    let (i, _)      = char('"').parse(i)?;
-    let (i, metodo) = terminated(campo_metodo, char(' ')).parse(i)?;
-    let (i, ruta)   = terminated(campo_ruta, char(' ')).parse(i)?;
-    let (i, _)      = take_until("\"").parse(i)?;
-    let (i, _)      = terminated(char('"'), space1).parse(i)?;
-    let (i, estado) = terminated(map_res(digit1, |s: &str| s.parse::<u16>()), space1).parse(i)?;
-    let (i, bytes)  = opt(map_res(digit1, |s: &str| s.parse::<u64>())).parse(i)?;
-
-    Ok((i, EntradaDespues { ip, metodo, ruta, estado, bytes }))
-}
-
-// ANTES: parsear_linea devuelve EntradaAntes con 3 String allocations/línea
-// DESPUÉS: parsear_linea_optimizado devuelve EntradaDespues con ~0 allocs/línea
-// (solo aloca si la ruta tiene %-encoding, caso < 5% en logs típicos)
+--8<-- "src/chapter_05/logparser_v2/src/lib.rs"
 ```
 
-### `src/aggregate.rs` — optimización 2: ahash + lasso
+### `src/parser.rs` — OPT-01: `Cow` y `&str` en lugar de `String`
+
+Las dos versiones comparten el mismo parser `nom` (`campos`); solo cambia qué hacen
+con lo que extrae. `parsear_linea_antes` copia cada campo a un `String`;
+`parsear_linea` devuelve referencias al input y solo copia la ruta cuando hay
+`%XX` que decodificar.
 
 ```rust
-use ahash::AHashMap;
-use lasso::{Rodeo, Spur};
-use smallvec::SmallVec;
-
-// ANTES: HashMap<String, u64> con SipHash
-pub struct EstadisticasAntes {
-    pub por_ruta:   std::collections::HashMap<String, u64>,
-    pub por_ip:     std::collections::HashMap<String, u64>,
-    pub por_estado: std::collections::HashMap<u16, u64>,
-}
-
-// DESPUÉS: AHashMap<Spur, u64> con lasso para dedup de strings
-pub struct EstadisticasDespues {
-    // Spurs son u32: 4 bytes en vez de 24+ de String, hash O(1) en vez de O(n)
-    pub por_ruta:      AHashMap<Spur, u64>,
-    pub por_ip:        AHashMap<Spur, u64>,
-    pub por_estado:    AHashMap<u16, u64>,
-    pub interner:      Rodeo,          // dueño de los strings únicos
-    // SmallVec para listas de top-N: cero alloc si <= 10 elementos
-    pub top_rutas:     SmallVec<[(Spur, u64); 10]>,
-}
-
-impl EstadisticasDespues {
-    pub fn nueva() -> Self {
-        EstadisticasDespues {
-            por_ruta:   AHashMap::new(),
-            por_ip:     AHashMap::new(),
-            por_estado: AHashMap::new(),
-            interner:   Rodeo::default(),
-            top_rutas:  SmallVec::new(),
-        }
-    }
-
-    pub fn registrar(&mut self, ip: &str, ruta: &str, estado: u16) {
-        // intern() devuelve el Spur existente o crea uno nuevo
-        let spur_ip   = self.interner.get_or_intern(ip);
-        let spur_ruta = self.interner.get_or_intern(ruta);
-
-        *self.por_ip.entry(spur_ip).or_default()        += 1;
-        *self.por_ruta.entry(spur_ruta).or_default()    += 1;
-        *self.por_estado.entry(estado).or_default()     += 1;
-    }
-
-    pub fn top_rutas(&self, n: usize) -> Vec<(&str, u64)> {
-        let mut v: Vec<_> = self.por_ruta.iter()
-            .map(|(&spur, &cnt)| (self.interner.resolve(&spur), cnt))
-            .collect();
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
-        v.truncate(n);
-        v
-    }
-}
-
-// MEJORA ESPERADA:
-// - ahash vs SipHash: 2.5x más rápido en lookup/insert
-// - Spur (4B) vs String (24+B clone): -80% allocaciones en agregación
-// - SmallVec top_rutas: cero alloc para logs con <= 10 rutas distintas
+--8<-- "src/chapter_05/logparser_v2/src/parser.rs"
 ```
 
-### `src/output.rs` — optimización 3: output buffering
+### `src/aggregate.rs` — OPT-02: `ahash` + `lasso`
 
 ```rust
-use serde::Serialize;
-use serde_json;
-use std::io::{self, BufWriter, Write};
-
-// ANTES: una syscall por línea
-pub fn escribir_json_antes<T: Serialize>(items: &[T]) -> io::Result<()> {
-    for item in items {
-        // to_string alloca String temporal + println! hace lock/write/unlock
-        println!("{}", serde_json::to_string(item).unwrap());
-    }
-    Ok(())
-}
-
-// DESPUÉS: buffer de 256 KB, pocas syscalls
-pub fn escribir_json_despues<T: Serialize>(items: &[T]) -> io::Result<()> {
-    let stdout = io::stdout();
-    // BufWriter: acumula writes en buffer, syscall cada 256 KB (no por línea)
-    let mut out = BufWriter::with_capacity(256 * 1024, stdout.lock());
-    for item in items {
-        // to_writer: sin String temporal, escribe directo al BufWriter
-        serde_json::to_writer(&mut out, item)?;
-        out.write_all(b"\n")?;
-    }
-    out.flush()  // asegurar que el buffer se vacíe al final
-}
-
-// ANTES (1M líneas): ~1M syscalls write() ← muy costoso
-// DESPUÉS (1M líneas): ~16 syscalls write() ← insignificante
-
-// Para CSV: write! directo al buffer, sin serde overhead
-pub fn escribir_csv<F>(
-    estadisticas: &[(String, u64)],
-    mut out: impl Write,
-) -> io::Result<()> {
-    out.write_all(b"ruta,peticiones\n")?;
-    for (ruta, cnt) in estadisticas {
-        write!(out, "{ruta},{cnt}\n")?;
-    }
-    Ok(())
-}
+--8<-- "src/chapter_05/logparser_v2/src/aggregate.rs"
 ```
 
-### `benches/optimizaciones.rs` — comparar antes vs después
+### `src/output.rs` — OPT-03: `BufWriter` + `to_writer`
+
+Ambas funciones reciben cualquier `impl Write`: en producción, `stdout`; en los tests,
+un `Vec<u8>`; en el benchmark, un archivo temporal real.
 
 ```rust
-use criterion::{
-    black_box, criterion_group, criterion_main,
-    BenchmarkId, Criterion, Throughput,
-};
-use logparser_v2::{aggregate::*, output::*, parser::*};
-use std::io::sink;
-
-// ── Generar datos de prueba ───────────────────────────────────────────────
-
-fn generar_lineas(n: usize) -> Vec<String> {
-    (0..n).map(|i| format!(
-        r#"10.0.0.{ip} - - [01/Jan/2024:00:00:{ss:02} +0000] "GET /api/v1/items/{i} HTTP/1.1" {status} {bytes} "-" "curl/7.68""#,
-        ip     = i % 255,
-        ss     = i % 60,
-        status = if i % 10 == 0 { 500 } else { 200 },
-        bytes  = 100 + (i % 900),
-        i      = i,
-    )).collect()
-}
-
-// ── Benchmark 1: parser (Cow vs String) ──────────────────────────────────
-
-fn bench_parser(c: &mut Criterion) {
-    let lineas = generar_lineas(10_000);
-    let bytes_total: u64 = lineas.iter().map(|l| l.len() as u64).sum();
-
-    let mut grupo = c.benchmark_group("parser");
-    grupo.throughput(Throughput::Bytes(bytes_total));
-
-    grupo.bench_function("antes/String-alloc", |b| {
-        b.iter(|| {
-            lineas.iter().filter_map(|l| {
-                // simula el parser original que crea Strings
-                let parts: Vec<&str> = l.splitn(10, ' ').collect();
-                if parts.len() < 7 { return None; }
-                Some(black_box((
-                    parts[0].to_string(),  // ip: alloca
-                    parts[5].to_string(),  // metodo: alloca
-                    parts[6].to_string(),  // ruta: alloca
-                )))
-            }).count()
-        })
-    });
-
-    grupo.bench_function("despues/Cow-zero-copy", |b| {
-        b.iter(|| {
-            lineas.iter().filter_map(|l| {
-                parsear_linea_optimizado(black_box(l)).ok()
-                    .map(|(_, e)| black_box((e.ip, e.metodo, e.ruta)))
-            }).count()
-        })
-    });
-
-    grupo.finish();
-}
-
-// ── Benchmark 2: agregación (SipHash/String vs ahash/Spur) ───────────────
-
-fn bench_agregacion(c: &mut Criterion) {
-    let lineas = generar_lineas(100_000);
-    let n = lineas.len() as u64;
-
-    let mut grupo = c.benchmark_group("agregacion");
-    grupo.throughput(Throughput::Elements(n));
-
-    grupo.bench_function("antes/SipHash-String", |b| {
-        b.iter(|| {
-            let mut stats = EstadisticasAntes {
-                por_ruta:   std::collections::HashMap::new(),
-                por_ip:     std::collections::HashMap::new(),
-                por_estado: std::collections::HashMap::new(),
-            };
-            for linea in &lineas {
-                let parts: Vec<&str> = linea.splitn(10, ' ').collect();
-                if parts.len() >= 8 {
-                    let ip    = parts[0].to_string();
-                    let ruta  = parts[6].to_string();
-                    let estado: u16 = parts[8].parse().unwrap_or(0);
-                    *stats.por_ip.entry(ip).or_default()       += 1;
-                    *stats.por_ruta.entry(ruta).or_default()   += 1;
-                    *stats.por_estado.entry(estado).or_default()+= 1;
-                }
-            }
-            black_box(stats.por_ruta.len())
-        })
-    });
-
-    grupo.bench_function("despues/ahash-Spur", |b| {
-        b.iter(|| {
-            let mut stats = EstadisticasDespues::nueva();
-            for linea in &lineas {
-                if let Ok((_, e)) = parsear_linea_optimizado(black_box(linea)) {
-                    stats.registrar(e.ip, e.ruta.as_ref(), e.estado);
-                }
-            }
-            black_box(stats.por_ruta.len())
-        })
-    });
-
-    grupo.finish();
-}
-
-// ── Benchmark 3: output (println! vs BufWriter) ──────────────────────────
-
-fn bench_output(c: &mut Criterion) {
-    let n = 100_000usize;
-    let lineas = generar_lineas(n);
-
-    // Parseamos una vez, comparamos solo el output
-    let entradas: Vec<_> = lineas.iter()
-        .filter_map(|l| parsear_linea_optimizado(l).ok().map(|(_, e)| {
-            serde_json::json!({ "ip": e.ip, "estado": e.estado })
-        }))
-        .collect();
-
-    let mut grupo = c.benchmark_group("output");
-    grupo.throughput(Throughput::Elements(n as u64));
-
-    grupo.bench_function("antes/to_string-por-linea", |b| {
-        b.iter(|| {
-            // Simular el overhead de to_string por línea (sin la syscall real)
-            let mut total_bytes = 0usize;
-            for e in &entradas {
-                let s = black_box(serde_json::to_string(e).unwrap());
-                total_bytes += s.len();
-            }
-            black_box(total_bytes)
-        })
-    });
-
-    grupo.bench_function("despues/to_writer-buffered", |b| {
-        b.iter(|| {
-            // Simular to_writer a sink (sin syscall)
-            let mut out = std::io::BufWriter::with_capacity(256 * 1024, sink());
-            for e in &entradas {
-                let _ = serde_json::to_writer(black_box(&mut out), e);
-                let _ = out.write_all(b"\n");
-            }
-            black_box(out.flush())
-        })
-    });
-
-    grupo.finish();
-}
-
-criterion_group!(benches, bench_parser, bench_agregacion, bench_output);
-criterion_main!(benches);
+--8<-- "src/chapter_05/logparser_v2/src/output.rs"
 ```
 
----
+### `src/main.rs`
 
-## Plantilla `OPTIMIZATION_LOG.md`
-
-Este documento es el artefacto obligatorio de la semana. Cada optimización
-requiere una entrada:
-
-```markdown
-# OPTIMIZATION_LOG — logparser v2
-
-## Metodología
-Ciclo: Baseline → Flamegraph → Hipótesis → Implementación → Criterion → Regresión
-
----
-
-## OPT-01: ahash + lasso en agregación
-
-### Baseline (cargo bench -- agregacion/antes)
-```
-time: [14.2 ms 14.5 ms 14.8 ms]
-thrpt: [6.3 Mops/s 6.5 Mops/s 6.7 Mops/s]
+```rust
+--8<-- "src/chapter_05/logparser_v2/src/main.rs"
 ```
 
-### Flamegraph antes
-- `HashMap::insert`: 28% del tiempo total (identificado con cargo flamegraph)
-- `siphasher::sip128::hash`: 11% del tiempo total
+### `benches/optimizaciones.rs`
 
-### Hipótesis
-SipHash-1-3 calcula un hash criptográficamente seguro para cada key.
-Para un mapa interno sin exposición a input externo, ahash (AES-NI) es
-suficiente y 2.5x más rápido en x86-64.
+Cada grupo mide **una** optimización aislada: la agregación recibe entradas ya
+parseadas y la salida escribe entradas ya construidas. Si midiéramos todo el
+pipeline junto, no sabríamos qué cambio aportó qué.
 
-### Implementación
-- `HashMap<String, u64>` → `AHashMap<Spur, u64>`
-- `String::clone()` en insert → `Rodeo::get_or_intern()` devuelve Spur (u32)
-- Diff: 47 líneas modificadas, 0 unsafe, feature flags: ninguno
-
-### Resultado (cargo bench -- agregacion/despues)
-```
-time: [5.8 ms 5.9 ms 6.1 ms]
-thrpt: [15.4 Mops/s 16.0 Mops/s 16.5 Mops/s]
-change: [-59.7% -59.0% -58.4%] (p = 0.00 < 0.05) ← 2.5x speedup
-```
-
-### Regresión
-- cargo test --all: ✅ 0 failures
-- cargo miri test: ✅ (no unsafe en este cambio)
-- heaptrack antes: 1.2M allocs en agregación
-- heaptrack después: 0.1M allocs en agregación (-92%)
-
----
-
-## OPT-02: Cow<str> en parser (zero-copy)
-
-### Baseline
-- heaptrack: 2.4M String allocs/run (una por campo ip/método/ruta)
-
-### Hipótesis
-El 95% de las rutas en los logs no tienen %-encoding. Devolver &str
-directamente elimina la allocación en ese caso. Cow<str> cubre el 5%
-que sí necesita decodificación.
-
-### Resultado
-- Parser throughput: 1.8 → 3.1 GB/s (+72%)
-- Allocaciones: -85% (2.4M → 0.36M)
-
----
-
-## OPT-03: BufWriter en output
-
-### Baseline
-- strace revela: 1,000,000 llamadas write() por 1M líneas de log
-
-### Resultado
-- BufWriter(256KB): ~60 llamadas write() por 1M líneas
-- Output throughput: 120 MB/s → 890 MB/s (+7x)
-- to_writer vs to_string: -45% tiempo de serialización (sin String temporal)
-```
-
----
-
-## Resumen de resultados esperados
-
-```text
-BENCHMARK FINAL: logparser v2 vs v1 (100K líneas nginx, 1 hilo)
-
-Fase          │ v1 (Semana 16)    │ v2 (Semana 19)    │ Speedup
-──────────────┼───────────────────┼───────────────────┼────────
-Parsing       │ 380 MB/s          │ 980 MB/s          │ 2.6x
-Agregación    │  6.5 Mops/s       │ 16.0 Mops/s       │ 2.5x
-Output JSON   │ 120 MB/s          │ 890 MB/s          │ 7.4x
-Allocaciones  │  4.8 M/run        │  0.4 M/run        │ -92%
-Peak memory   │ 128.5 MB          │ 18.2 MB           │ -86%
-
-Pipeline completo (parse + aggregate + output):
-  v1: 14.8 ms / 100K líneas  →  ~6.8 M líneas/s
-  v2:  5.1 ms / 100K líneas  →  ~19.6 M líneas/s  (2.9x end-to-end)
+```rust
+--8<-- "src/chapter_05/logparser_v2/benches/optimizaciones.rs"
 ```
 
 ---
 
 ## Tests de regresión
 
+Una optimización que cambia el resultado es un bug. Estos tests comparan la versión
+antes y después con las mismas entradas:
+
 ```rust
-// tests/regresion.rs
-
-#[test]
-fn parser_cow_equivalente_a_string() {
-    let linea = r#"192.168.1.1 - - [01/Jan/2024:00:00:00 +0000] "GET /api/items HTTP/1.1" 200 1024 "-" "curl/7""#;
-
-    let (_, opt) = logparser_v2::parser::parsear_linea_optimizado(linea).unwrap();
-    assert_eq!(opt.ip,     "192.168.1.1");
-    assert_eq!(opt.metodo, "GET");
-    assert_eq!(opt.ruta.as_ref(), "/api/items");
-    assert_eq!(opt.estado, 200);
-    assert_eq!(opt.bytes,  Some(1024));
-}
-
-#[test]
-fn cow_borrowed_en_ruta_sin_encoding() {
-    use std::borrow::Cow;
-    let linea = r#"1.2.3.4 - - [01/Jan/2024:00:00:00 +0000] "GET /sin/encoding HTTP/1.1" 200 0 "-" "-""#;
-    let (_, opt) = logparser_v2::parser::parsear_linea_optimizado(linea).unwrap();
-    // Sin %-encoding → Borrowed (cero alloc)
-    assert!(matches!(opt.ruta, Cow::Borrowed(_)));
-}
-
-#[test]
-fn cow_owned_con_percent_encoding() {
-    use std::borrow::Cow;
-    let linea = r#"1.2.3.4 - - [01/Jan/2024:00:00:00 +0000] "GET /con%20encoding HTTP/1.1" 200 0 "-" "-""#;
-    let (_, opt) = logparser_v2::parser::parsear_linea_optimizado(linea).unwrap();
-    // Con %-encoding → Owned (decodificado)
-    assert!(matches!(opt.ruta, Cow::Owned(_)));
-    assert_eq!(opt.ruta.as_ref(), "/con encoding");
-}
-
-#[test]
-fn estadisticas_correctas() {
-    let mut stats = logparser_v2::aggregate::EstadisticasDespues::nueva();
-    stats.registrar("1.1.1.1", "/api", 200);
-    stats.registrar("1.1.1.1", "/api", 404);
-    stats.registrar("2.2.2.2", "/home", 200);
-
-    let top = stats.top_rutas(5);
-    assert_eq!(top.len(), 2);
-    assert_eq!(top[0].0, "/api");    // más frecuente
-    assert_eq!(top[0].1, 2);
-    assert_eq!(top[1].0, "/home");
-    assert_eq!(top[1].1, 1);
-}
-
-#[test]
-fn output_json_produce_lineas_validas() {
-    use serde_json::Value;
-    let items = vec![
-        serde_json::json!({"ip": "1.1.1.1", "estado": 200}),
-        serde_json::json!({"ip": "2.2.2.2", "estado": 404}),
-    ];
-    let mut buf: Vec<u8> = Vec::new();
-    logparser_v2::output::escribir_json_despues(&items[..], &mut buf).unwrap();
-
-    let contenido = String::from_utf8(buf).unwrap();
-    let lineas: Vec<&str> = contenido.trim().split('\n').collect();
-    assert_eq!(lineas.len(), 2);
-
-    let parsed: Value = serde_json::from_str(lineas[0]).unwrap();
-    assert_eq!(parsed["ip"], "1.1.1.1");
-}
+--8<-- "src/chapter_05/logparser_v2/tests/regresion.rs"
 ```
+
+### Contar allocaciones sin heaptrack
+
+`heaptrack` responde "¿cuántas allocaciones hace esto?", pero no corre en CI ni en
+todos los sistemas. Un `#[global_allocator]` que cuenta llamadas responde lo mismo
+desde un test, y además lo **congela**: si una refactorización vuelve a allocar por
+línea, el test falla.
+
+```rust
+--8<-- "src/chapter_05/logparser_v2/tests/allocaciones.rs"
+```
+
+```bash
+cargo test -p logparser_v2 --test allocaciones -- --nocapture
+```
+
+```text
+allocaciones para 100000 líneas:
+  parser      antes  300000   después   12500
+  agregación  antes  200014   después      27
+  output      antes  100000   después       1
+```
+
+Las cifras se explican línea a línea: el parser "antes" crea 3 `String` por línea;
+el "después" solo alloca para las 12 500 rutas con `%20` (1 de cada 8). La agregación
+"antes" copia IP y ruta en cada llamada (2 por línea); con `lasso`, cada string se
+guarda una vez y lo que queda son las pocas allocaciones del interner y de los mapas
+al crecer. En la salida, `to_string` crea un `String` por línea; `to_writer` escribe
+directo al único buffer del `BufWriter`.
+
+Este test ya se ganó el sueldo mientras escribíamos el proyecto: la primera versión
+de `decodificar_url` terminaba con `String::from_utf8_lossy(&out).into_owned()`, que
+copia el buffer en vez de reutilizarlo, y el test reportó 312 500 allocaciones en
+lugar de las 300 000 esperadas.
+
+### Contar syscalls con `strace`
+
+```bash
+cargo build --release -p logparser_v2
+strace -f -c -e trace=write target/release/logparser_v2 --antes < access.log > /dev/null
+strace -f -c -e trace=write target/release/logparser_v2         < access.log > /dev/null
+```
+
+Con un `access.log` de 100 000 líneas (10 MB):
+
+```text
+# --antes
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    1.135667          11    100001           write
+
+# después
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000515           7        66           write
+```
+
+`stdout` en Rust es line-buffered: sin `BufWriter`, cada `writeln!` es una syscall
+(100 000, más la del resumen en stderr). Con el buffer de 256 KiB, 66.
+
+---
+
+## Plantilla `OPTIMIZATION_LOG.md`
+
+Este documento es el artefacto obligatorio de la semana: una entrada por
+optimización, con números **medidos**, no estimados. Así queda con los resultados de
+este proyecto:
+
+````markdown
+# OPTIMIZATION_LOG — logparser v2
+
+Máquina: AMD Ryzen 7 7735HS (8 núcleos / 16 hilos), Linux (WSL2), Rust 1.96, perfil bench.
+Datos: 100 000 líneas nginx sintéticas (9.6 MiB), 250 IPs, 40 rutas.
+
+## OPT-01: `&str` + `Cow<str>` en el parser
+
+### Hipótesis
+El parser copia IP, método y ruta a tres `String` por línea, aunque solo 1 de cada 8
+rutas necesita decodificarse.
+
+### Resultado (`cargo bench -- parser`)
+parser/antes     time: [18.832 ms 18.910 ms 18.996 ms]  thrpt: 503 MiB/s
+parser/despues   time: [14.688 ms 14.810 ms 14.975 ms]  thrpt: 643 MiB/s
+Allocaciones: 300 000 → 12 500.
+
+### Conclusión
+1.28x. Casi 24x menos allocaciones, pero el tiempo lo domina el parseo con nom,
+no el allocator: quitar allocaciones ayuda menos de lo que sugiere su número.
+
+## OPT-02: `ahash` + interning con `lasso` en la agregación
+
+### Resultado (`cargo bench -- agregacion`)
+agregacion/antes    time: [7.6068 ms 7.6346 ms 7.6677 ms]  thrpt: 13.1 Melem/s
+agregacion/despues  time: [6.1098 ms 6.1377 ms 6.1673 ms]  thrpt: 16.3 Melem/s
+Allocaciones: 200 014 → 27.
+
+### Conclusión
+1.24x. Con claves cortas (IPs y rutas de ~15 bytes), hashear el texto una vez por
+línea sigue siendo el costo principal: el interner también lo hashea para buscar
+el Spur. La ganancia real es de memoria: cada string se guarda una sola vez.
+
+## OPT-03: `BufWriter` + `to_writer` en la salida
+
+### Resultado (`cargo bench -- output`, escribiendo a un archivo real)
+output/antes     time: [168.11 ms 169.19 ms 170.52 ms]  thrpt: 591 Kelem/s
+output/despues   time: [10.781 ms 10.884 ms 10.996 ms]  thrpt: 9.19 Melem/s
+strace -c: 100 001 → 66 llamadas a write().
+
+### Conclusión
+15.5x. Una syscall cuesta microsegundos; una allocation, decenas de nanosegundos.
+La optimización con más impacto fue la más simple.
+
+## Regresión
+cargo test -p logparser_v2: 7 tests OK (antes y después producen la misma salida).
+````
 
 ---
 
@@ -1217,18 +863,20 @@ fn output_json_produce_lineas_validas() {
   de líneas calientes antes de perfilar CPU (una alloc por iteración = cache miss).
 - [ ] `cargo bloat --release --crates` me dice qué crates contribuyen más al
   tamaño. Activo `lto = true` y `codegen-units = 1` en `[profile.release]`.
-- [ ] `ahash` reemplaza `SipHash` en mapas internos (no expuestos a input externo).
-  Verifico con criterion que el speedup es ≥ 2x en el benchmark de agregación.
+- [ ] `ahash` reemplaza `SipHash` en mapas internos (no expuestos a input externo), y
+  mido con criterion cuánto gana **en mi caso** (en el proyecto: 1.24x junto con el
+  interning).
 - [ ] `Cow<str>` en el parser devuelve `Borrowed` (cero alloc) en el caso común
   (sin %-encoding, ≥ 90% de las líneas). Solo `Owned` cuando hay transformación.
 - [ ] `SmallVec<[T; N]>` en colecciones donde N cubre el caso común (top-10 rutas,
   headers HTTP). Verifico que `size_of::<SmallVec<[u8; 16]>>()` es razonable.
 - [ ] El output usa `BufWriter::with_capacity(256 * 1024)` + `to_writer` en lugar
-  de `to_string` por línea. El benchmark muestra ≥ 5x mejora en output throughput.
+  de `to_string` por línea. El benchmark lo confirma (en el proyecto: 15.5x) y
+  `strace -c` muestra la caída en llamadas a `write()`.
 - [ ] `OPTIMIZATION_LOG.md` tiene una entrada por cada optimización con: baseline
   criterion, flamegraph analysis, hipótesis, implementación y resultado.
-- [ ] `cargo test --all-features` pasa los 5 tests de regresión tras cada
-  optimización. Ninguna optimización rompe la corrección.
+- [ ] `cargo test` pasa los 6 tests de regresión y el de allocaciones tras cada
+  optimización. Ninguna optimización cambia el resultado.
 
 !!! abstract "Siguiente sección"
 

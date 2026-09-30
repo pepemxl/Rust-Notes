@@ -1,0 +1,5 @@
+error: `each` requiere un campo de tipo Vec<T>
+ --> tests/ui/each_sin_vec.rs:6:16
+  |
+6 |     etiquetas: String,
+  |                ^^^^^^

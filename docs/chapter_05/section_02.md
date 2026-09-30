@@ -20,7 +20,7 @@ En esta sección aprenderemos:
 - **`DashMap`**: mapa concurrent sharded lista para usar.
 - **`Rayon`**: paralelismo de datos con work stealing, integración con async.
 - **Proyecto**: benchmark científico — cuatro implementaciones de un contador
-  distribuido comparadas con `criterion` variando threads de 1 a 64.
+  distribuido comparadas con `criterion` variando los hilos de 1 a 2 × núcleos.
 
 !!! quote ""
 
@@ -595,7 +595,9 @@ fn trabajo_stealing_basico() {
             // Cola local vacía: roba del injector o de otros workers
             std::iter::repeat_with(|| {
                 injector.steal_batch_and_pop(worker)
-                    .or_else(|| stealers.iter().map(|s| s.steal()).find(|s| !s.is_retry()))
+                    // Steal implementa FromIterator: collect() devuelve el primer robo
+                    // exitoso, o Retry si alguno pidió reintentar
+                    .or_else(|| stealers.iter().map(|s| s.steal()).collect())
             })
             .find(|s| !s.is_retry())
             .and_then(|s| s.success())
@@ -696,6 +698,7 @@ fn procesamiento_paralelo() {
 
 ```rust
 use rayon::ThreadPoolBuilder;
+use rayon::prelude::*;
 
 fn pool_configurado() {
     let pool = ThreadPoolBuilder::new()
@@ -756,471 +759,111 @@ async fn pipeline() {
 Comparamos cuatro implementaciones de un contador concurrente bajo carga creciente
 de escritura, variando el número de hilos de 1 a (2 × núcleos).
 
+El código completo está en
+[`contador_distribuido`](https://github.com/pepemxl/Rust-Notes/tree/master/src/chapter_05/contador_distribuido).
+
 ### Estructura
 
-```
-sharded_counter/
+```text
+contador_distribuido/
 ├── Cargo.toml
 ├── src/
-│   └── lib.rs        ← trait Counter + 4 implementaciones
-└── benches/
-    └── counter_bench.rs
+│   └── lib.rs              ← trait Contador + implementaciones + generador de carga
+├── benches/
+│   └── counter_bench.rs
+└── tests/
+    └── correctness.rs
 ```
 
 ### `Cargo.toml`
 
 ```toml
-[package]
-name    = "sharded-counter"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-parking_lot  = "0.12"
-crossbeam    = "0.8"
-dashmap      = "6"
-cache-padded = "1"
-
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-num_cpus  = "1"
-
-[[bench]]
-name    = "counter_bench"
-harness = false
+--8<-- "src/chapter_05/contador_distribuido/Cargo.toml"
 ```
 
 ### `src/lib.rs` — trait y cuatro implementaciones
 
+Además de las cuatro variantes hay una quinta, `AtomicSinPadding`, idéntica a
+`AtomicPadded` salvo por el `#[repr(align(64))]`: es el contraejemplo para medir el
+false sharing. `ejecutar_carga` usa `std::thread::scope`, así que los hilos pueden
+tomar prestado `&C` sin envolver el contador en `Arc`.
+
 ```rust
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-// ── Trait común ────────────────────────────────────────────────────────────
-
-pub trait Contador: Send + Sync + 'static {
-    /// Incrementar el shard sugerido. La implementación puede ignorar el hint.
-    fn incrementar(&self, shard_hint: usize);
-    /// Leer el total global. Puede ser aproximado bajo carga (Relaxed).
-    fn total(&self) -> u64;
-}
-
-// ── Implementación 1: Atómico con padding ─────────────────────────────────
-
-/// Cada shard ocupa su propia línea de cache (64 bytes).
-/// Ordering::Relaxed: sin barreras, solo atomicidad.
-/// El más rápido bajo alta contención de escritura.
-#[repr(align(64))]
-struct ShardPadded(AtomicU64);
-
-pub struct AtomicPadded {
-    shards: Box<[ShardPadded]>,
-}
-
-impl AtomicPadded {
-    pub fn nuevo(n_shards: usize) -> Self {
-        let shards = (0..n_shards.max(1))
-            .map(|_| ShardPadded(AtomicU64::new(0)))
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-        AtomicPadded { shards }
-    }
-}
-
-impl Contador for AtomicPadded {
-    fn incrementar(&self, shard_hint: usize) {
-        let idx = shard_hint % self.shards.len();
-        self.shards[idx].0.fetch_add(1, Ordering::Relaxed);
-    }
-
-    fn total(&self) -> u64 {
-        self.shards.iter().map(|s| s.0.load(Ordering::Relaxed)).sum()
-    }
-}
-
-// ── Implementación 2: Mutex sharded (parking_lot) ─────────────────────────
-
-/// parking_lot::Mutex es ~2x más rápido que std::sync::Mutex.
-/// Aún así, con alta contención el lock serializa las escrituras.
-pub struct MutexSharded {
-    shards: Box<[parking_lot::Mutex<u64>]>,
-}
-
-impl MutexSharded {
-    pub fn nuevo(n_shards: usize) -> Self {
-        let shards = (0..n_shards.max(1))
-            .map(|_| parking_lot::Mutex::new(0u64))
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-        MutexSharded { shards }
-    }
-}
-
-impl Contador for MutexSharded {
-    fn incrementar(&self, shard_hint: usize) {
-        let idx = shard_hint % self.shards.len();
-        *self.shards[idx].lock() += 1;
-    }
-
-    fn total(&self) -> u64 {
-        self.shards.iter().map(|s| *s.lock()).sum()
-    }
-}
-
-// ── Implementación 3: DashMap ─────────────────────────────────────────────
-
-/// DashMap es un HashMap sharded internamente con RwLock por shard.
-/// Útil cuando también necesitas lookup por clave (no solo contador).
-pub struct DashmapContador {
-    mapa: dashmap::DashMap<usize, u64>,
-    n_shards: usize,
-}
-
-impl DashmapContador {
-    pub fn nuevo(n_shards: usize) -> Self {
-        let n = n_shards.max(1);
-        let mapa = dashmap::DashMap::with_capacity_and_shard_amount(n, n * 4);
-        for i in 0..n { mapa.insert(i, 0u64); }
-        DashmapContador { mapa, n_shards: n }
-    }
-}
-
-impl Contador for DashmapContador {
-    fn incrementar(&self, shard_hint: usize) {
-        let key = shard_hint % self.n_shards;
-        *self.mapa.get_mut(&key).unwrap() += 1;
-    }
-
-    fn total(&self) -> u64 {
-        self.mapa.iter().map(|e| *e.value()).sum()
-    }
-}
-
-// ── Implementación 4: Actor con crossbeam::channel ───────────────────────
-
-/// Cada shard es un hilo independiente con su propio canal.
-/// Cero sharing: estado completamente privado de cada actor.
-/// Ideal cuando las escrituras van a 1 clave (no se disputan shards).
-use crossbeam::channel::{self, Sender};
-
-enum MensajeActor {
-    Inc,
-    Get(Sender<u64>),
-}
-
-pub struct ActorCanal {
-    shards: Vec<Sender<MensajeActor>>,
-}
-
-impl ActorCanal {
-    pub fn nuevo(n_shards: usize) -> Self {
-        let n = n_shards.max(1);
-        let mut shards = Vec::with_capacity(n);
-
-        for _ in 0..n {
-            let (tx, rx) = channel::bounded::<MensajeActor>(4096);
-            std::thread::spawn(move || {
-                let mut count = 0u64;
-                while let Ok(msg) = rx.recv() {
-                    match msg {
-                        MensajeActor::Inc       => count += 1,
-                        MensajeActor::Get(resp) => { let _ = resp.send(count); }
-                    }
-                }
-            });
-            shards.push(tx);
-        }
-
-        ActorCanal { shards }
-    }
-}
-
-impl Contador for ActorCanal {
-    fn incrementar(&self, shard_hint: usize) {
-        let idx = shard_hint % self.shards.len();
-        // send puede fallar si el canal está lleno; en benchmark ignoramos
-        let _ = self.shards[idx].send(MensajeActor::Inc);
-    }
-
-    fn total(&self) -> u64 {
-        let mut suma = 0u64;
-        for tx in &self.shards {
-            let (resp_tx, resp_rx) = channel::bounded(1);
-            let _ = tx.send(MensajeActor::Get(resp_tx));
-            suma += resp_rx.recv().unwrap_or(0);
-        }
-        suma
-    }
-}
-
-// ── Utilidad de prueba ─────────────────────────────────────────────────────
-
-/// Ejecuta N_HILOS incrementando TOTAL_OPS/N_HILOS veces cada uno.
-/// Devuelve el total registrado (debe ser == TOTAL_OPS).
-pub fn ejecutar_carga<C: Contador>(
-    contador: Arc<C>,
-    n_hilos:   usize,
-    total_ops: u64,
-) -> u64 {
-    let ops_por_hilo = total_ops / n_hilos as u64;
-
-    std::thread::scope(|s| {
-        for t in 0..n_hilos {
-            let c = Arc::clone(&contador);
-            s.spawn(move || {
-                for _ in 0..ops_por_hilo {
-                    c.incrementar(t);
-                }
-            });
-        }
-    });
-
-    contador.total()
-}
+--8<-- "src/chapter_05/contador_distribuido/src/lib.rs"
 ```
 
 ### `benches/counter_bench.rs`
 
+Cada iteración usa un contador nuevo, pero crearlo (en `ActorCanal`, lanzar N hilos)
+y destruirlo no debe contar en la medición. `iter_batched_ref` resuelve eso: prepara
+la entrada fuera del cronómetro y la suelta también fuera.
+
 ```rust
-use criterion::{
-    black_box, criterion_group, criterion_main,
-    BenchmarkId, Criterion, Throughput,
-};
-use sharded_counter::*;
-use std::sync::Arc;
-
-const TOTAL_OPS: u64 = 1_000_000;
-
-fn bench_implementacion<C: Contador>(
-    grupo: &mut criterion::BenchmarkGroup<criterion::measurement::WallTime>,
-    nombre: &str,
-    factory: impl Fn(usize) -> C,
-    n_hilos: usize,
-) {
-    let n_shards = n_hilos; // un shard por hilo para mínima contención
-    let contador = Arc::new(factory(n_shards));
-
-    grupo.bench_with_input(
-        BenchmarkId::new(nombre, n_hilos),
-        &n_hilos,
-        |b, &t| {
-            b.iter(|| {
-                // Reiniciamos el contador antes de cada iteración
-                // (no podemos reiniciar directamente; creamos uno nuevo)
-                let c = Arc::new(factory(t.max(1)));
-                black_box(ejecutar_carga(c, t.max(1), TOTAL_OPS))
-            });
-        },
-    );
-    drop(contador);
-}
-
-fn bench_todos(c: &mut Criterion) {
-    let n_cpus = num_cpus::get();
-    let thread_counts = vec![1, 2, 4, 8, n_cpus, n_cpus * 2];
-
-    let mut grupo = c.benchmark_group("contador-distribuido");
-    grupo.throughput(Throughput::Elements(TOTAL_OPS));
-    grupo.sample_size(20);
-
-    for &n_hilos in &thread_counts {
-        bench_implementacion(
-            &mut grupo,
-            "AtomicPadded",
-            |n| AtomicPadded::nuevo(n),
-            n_hilos,
-        );
-        bench_implementacion(
-            &mut grupo,
-            "MutexSharded",
-            |n| MutexSharded::nuevo(n),
-            n_hilos,
-        );
-        bench_implementacion(
-            &mut grupo,
-            "DashMap",
-            |n| DashmapContador::nuevo(n),
-            n_hilos,
-        );
-        bench_implementacion(
-            &mut grupo,
-            "ActorCanal",
-            |n| ActorCanal::nuevo(n),
-            n_hilos,
-        );
-    }
-
-    grupo.finish();
-}
-
-fn bench_false_sharing(c: &mut Criterion) {
-    // Demostrar el impacto de false sharing comparando
-    // AtomicPadded (1 shard = 1 línea de cache) vs
-    // un "mal" contador sin padding
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    #[derive(Default)]
-    struct SinPadding {
-        shards: Vec<AtomicU64>,  // todos en memoria contigua → false sharing
-    }
-
-    let n_cpus = num_cpus::get();
-    let mut grupo = c.benchmark_group("false-sharing");
-    grupo.throughput(Throughput::Elements(TOTAL_OPS));
-    grupo.sample_size(20);
-
-    for &n_hilos in &[1usize, 2, 4, n_cpus] {
-        // CON padding
-        grupo.bench_with_input(
-            BenchmarkId::new("con-padding", n_hilos),
-            &n_hilos,
-            |b, &t| {
-                let c = Arc::new(AtomicPadded::nuevo(t));
-                b.iter(|| black_box(ejecutar_carga(Arc::clone(&c), t, TOTAL_OPS)));
-            },
-        );
-
-        // SIN padding (contención de cache line)
-        grupo.bench_with_input(
-            BenchmarkId::new("sin-padding", n_hilos),
-            &n_hilos,
-            |b, &t| {
-                let shards: Arc<Vec<AtomicU64>> = Arc::new(
-                    (0..t).map(|_| AtomicU64::new(0)).collect()
-                );
-                b.iter(|| {
-                    std::thread::scope(|s| {
-                        for i in 0..t {
-                            let sh = Arc::clone(&shards);
-                            let ops = TOTAL_OPS / t as u64;
-                            s.spawn(move || {
-                                for _ in 0..ops {
-                                    sh[i % sh.len()].fetch_add(1, Ordering::Relaxed);
-                                }
-                            });
-                        }
-                    });
-                    black_box(shards.iter().map(|s| s.load(Ordering::Relaxed)).sum::<u64>())
-                });
-            },
-        );
-    }
-
-    grupo.finish();
-}
-
-criterion_group!(benches, bench_todos, bench_false_sharing);
-criterion_main!(benches);
+--8<-- "src/chapter_05/contador_distribuido/benches/counter_bench.rs"
 ```
 
 ### Tests de corrección
 
+Un benchmark de un contador que pierde incrementos no mide nada. Estos tests
+comprueban que cada implementación llega al total exacto, también con un número de
+hilos que no divide las operaciones:
+
 ```rust
-// tests/correctness.rs
-use sharded_counter::*;
-use std::sync::Arc;
-
-const N_OPS: u64 = 100_000;
-
-macro_rules! test_correctitud {
-    ($nombre:ident, $tipo:expr) => {
-        #[test]
-        fn $nombre() {
-            for n_hilos in [1usize, 2, 4, 8] {
-                let contador = Arc::new($tipo(n_hilos));
-                let resultado = ejecutar_carga(Arc::clone(&contador), n_hilos, N_OPS);
-                assert_eq!(
-                    resultado, N_OPS,
-                    "fallo con {n_hilos} hilos: esperado {N_OPS}, obtenido {resultado}"
-                );
-            }
-        }
-    };
-}
-
-test_correctitud!(atomic_padded_correcto, AtomicPadded::nuevo);
-test_correctitud!(mutex_sharded_correcto, MutexSharded::nuevo);
-test_correctitud!(dashmap_correcto, DashmapContador::nuevo);
-test_correctitud!(actor_canal_correcto, ActorCanal::nuevo);
-
-#[test]
-fn atomic_padded_tamano_correcto() {
-    use std::mem::size_of;
-    // Verificar que el padding funciona: cada shard = 1 línea de cache
-    #[repr(align(64))]
-    struct ShardTest(std::sync::atomic::AtomicU64);
-    assert_eq!(size_of::<ShardTest>(), 64);
-    assert_eq!(size_of::<std::sync::atomic::AtomicU64>(), 8);
-}
-
-#[test]
-fn actor_canal_total_exacto() {
-    let actor = Arc::new(ActorCanal::nuevo(4));
-    for i in 0..1000 {
-        actor.incrementar(i % 4);
-    }
-    // Los mensajes son sincrónos en los hilos del actor,
-    // pero el canal puede tener mensajes en vuelo.
-    // Esperamos un poco para que se procesen.
-    std::thread::sleep(std::time::Duration::from_millis(50));
-    assert_eq!(actor.total(), 1000);
-}
-
-#[test]
-fn compare_exchange_saturating() {
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    let a = AtomicU64::new(u64::MAX - 5);
-    // Saturating add: no debe superar u64::MAX
-    let mut current = a.load(Ordering::Relaxed);
-    loop {
-        let nuevo = current.saturating_add(10);
-        match a.compare_exchange_weak(
-            current, nuevo,
-            Ordering::AcqRel, Ordering::Relaxed,
-        ) {
-            Ok(_)    => break,
-            Err(act) => current = act,
-        }
-    }
-    assert_eq!(a.load(Ordering::Relaxed), u64::MAX);
-}
+--8<-- "src/chapter_05/contador_distribuido/tests/correctness.rs"
 ```
 
 ---
 
-## Análisis de resultados esperados
+## Análisis de resultados
+
+Resultados de `cargo bench -p contador_distribuido` en un AMD Ryzen 7 7735HS
+(8 núcleos, 16 hilos con SMT) bajo Linux (WSL2). Throughput en millones de
+incrementos por segundo (valor central del intervalo de criterion):
 
 ```text
-THROUGHPUT (millones de ops/segundo) — resultados típicos en 8 cores:
+Implementación  │ 1 hilo │ 2 hilos │ 4 hilos │ 8 hilos │ 16 hilos │ 32 hilos
+────────────────┼────────┼─────────┼─────────┼─────────┼──────────┼─────────
+AtomicPadded    │   561  │    907  │   1392  │   1705  │    1159  │     667
+MutexSharded    │   228  │     44  │     56  │     74  │     141  │     173
+DashMap         │    69  │    122  │    189  │    217  │     232  │     250
+ActorCanal      │    55  │    100  │    128  │    192  │     190  │     177
 
-Implementación  │ 1 hilo │ 2 hilos │ 4 hilos │ 8 hilos │ 16 hilos
-────────────────┼────────┼─────────┼─────────┼─────────┼─────────
-AtomicPadded    │  320   │   580   │  1050   │  1900   │  2100  ← escala bien
-MutexSharded    │  180   │   310   │   490   │   720   │   650  ← contención
-DashMap         │  120   │   200   │   350   │   510   │   490  ← overhead hash
-ActorCanal      │   90   │   170   │   310   │   580   │   520  ← latencia canal
-
-FALSE SHARING (4 hilos):
-Sin padding:    │                          │  320 Mops/s
-Con padding:    │                          │ 1050 Mops/s  ← 3x más rápido
-
-ANÁLISIS:
-• AtomicPadded + Relaxed escala casi linealmente hasta saturar la
-  bandwidth de memoria: sin barreras, sin locks, sin invalidaciones
-  de cache entre shards → cada core trabaja en su propia línea.
-
-• MutexSharded y DashMap colapsan porque bajo alta contención el
-  lock tiene que ir al kernel (futex syscall) → latencia de 1-10 µs
-  por adquisición en lugar de ~1 ns de un Relaxed atómico.
-
-• ActorCanal tiene latencia de canal (~100 ns) pero es predecible
-  y sin jitter → mejor para workloads con fairness estricta.
-
-• False Sharing: 3x diferencia solo por el alignment. El benchmark
-  demuestra que "más cores" puede significar "menos throughput" si
-  no se controla el layout de memoria.
+FALSE SHARING (mismo código, solo cambia #[repr(align(64))]):
+                │ 1 hilo │ 2 hilos │ 4 hilos │ 8 hilos │ 16 hilos │ 32 hilos
+con-padding     │   590  │    885  │   1402  │   1722  │    1207  │     641
+sin-padding     │   569  │    132  │     95  │    107  │     170  │     247
 ```
+
+Lo que dicen los números (y un par de cosas que no esperábamos):
+
+- **`AtomicPadded` escala hasta los 8 núcleos físicos** (3x con 8 hilos) y después
+  **baja**: con 16 hilos, cada par comparte un núcleo por SMT; con 32, hay más hilos
+  que núcleos lógicos y el sistema operativo los alterna. "Más hilos" no es gratis.
+- **El false sharing cuesta un orden de magnitud**: con 4 hilos, 1402 contra 95
+  millones por segundo (**15x**) solo por el `#[repr(align(64))]`. Con un solo hilo
+  no hay nadie con quien pelear la línea de cache, y ambas versiones empatan.
+- **`MutexSharded` se desploma de 1 a 2 hilos** (228 → 44), exactamente como
+  `sin-padding`. No es el lock: es el mismo false sharing.
+  `size_of::<parking_lot::Mutex<u64>>()` es 16, así que caben 4 mutex por línea de
+  cache y los hilos, aunque usen shards distintos, se invalidan la línea entre sí.
+  Envolverlos en un struct con `#[repr(align(64))]` lo arreglaría. Es la lección más
+  valiosa del benchmark: el patrón "un shard por hilo" no sirve de nada si los shards
+  comparten línea.
+- **`DashMap` escala sin sorpresas** porque ya se protege: internamente envuelve cada
+  shard en `crossbeam_utils::CachePadded`. Paga hashing y un `RwLock` por incremento,
+  así que es hasta 8x más lento que el atómico, pero sin colapsos.
+- **`ActorCanal`** es el más lento con pocos hilos (cada incremento es un mensaje
+  por canal) y se estanca a partir de 8: además de los hilos que generan carga, cada
+  shard tiene su propio hilo actor, así que con N hilos hay 2N compitiendo por los
+  núcleos. Su ventaja no es el throughput sino el modelo: estado privado, sin locks.
+
+!!! warning "Tus números serán otros"
+
+    Dependen de la CPU (tamaño de línea de cache, número de núcleos, SMT), del sistema
+    operativo y de qué más esté corriendo. Lo que debe reproducirse son las
+    **tendencias**: el atómico con padding gana, sin padding colapsa desde 2 hilos, y
+    pasar del número de núcleos físicos no ayuda. Cierra otros programas antes de
+    medir y no compiles nada mientras corre `cargo bench`.
 
 ---
 
@@ -1313,9 +956,8 @@ let b = mapa.get_mut("clave-a");     // intenta write lock del shard 3 → DEADL
                                      // (a y b en el mismo shard)
 
 FIX: Nunca tengas dos guards vivos del mismo shard:
-let val = mapa.get("clave-a").map(|r| *r);  // copia y suelta el guard
-drop(a);
-let b = mapa.get_mut("clave-a");
+let val = mapa.get("clave-a").map(|r| *r);  // copia; el guard muere en esta línea
+let b = mapa.get_mut("clave-a");            // ✅ ya no hay otro guard vivo
 
 ───────────────────────────────────────────────────────────────────────
 
@@ -1348,12 +990,12 @@ a.compare_exchange(old, new, Ordering::AcqRel, Ordering::Acquire)?;
   opción para colas de trabajo en código multi-thread síncrono.
 - [ ] `DashMap` nunca tiene dos guards del mismo shard vivos simultáneamente
   (riesgo de deadlock).
-- [ ] `rayon::spawn_blocking` es el puente correcto para combinar Tokio (async I/O)
-  con Rayon (CPU-bound parallelism). Nunca bloqueo el runtime de Tokio.
+- [ ] `tokio::task::spawn_blocking` es el puente correcto para combinar Tokio (async
+  I/O) con Rayon (CPU-bound parallelism). Nunca bloqueo el runtime de Tokio.
 - [ ] `cargo bench` genera el informe HTML en `target/criterion/`. El benchmark
   muestra que `AtomicPadded` escala mejor que `MutexSharded` con ≥ 4 hilos.
-- [ ] `cargo test --test correctness` pasa los 5 tests (4 de corrección + 1
-  de tamaño de shard).
+- [ ] `cargo test --test correctness` pasa los 7 tests (5 de corrección, 1 de tamaño
+  de shard y 1 del orden FIFO de los actores).
 
 !!! abstract "Siguiente sección"
 

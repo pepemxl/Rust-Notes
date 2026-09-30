@@ -14,7 +14,7 @@ En esta sección aprenderemos:
   a `Arc<Mutex<T>>`. Estado privado, concurrencia por mensajes.
 - **Dependency Injection**: dispatch estático (generics) vs dinámico (`dyn Trait`).
   Configuración multicapa con `figment`.
-- **Proyecto**: URL Shortener v3 — refactorización completa con Typestate URLs,
+- **Proyecto**: URL Shortener v4 — refactorización completa con Typestate URLs,
   actor contador sharded y DI por traits.
 
 !!! quote ""
@@ -716,7 +716,6 @@ pub struct Config {
     pub port:           u16,
     pub database_url:   String,
     pub max_urls:       usize,
-    #[serde(with = "figment::value::magic::RelativePathBuf", default)]
     pub log_level:      String,
     pub actor_shards:   usize,
 }
@@ -756,651 +755,230 @@ impl Config {
 
 ---
 
-## Proyecto: URL Shortener v3
+## Proyecto: URL Shortener v4
 
-Refactoriza el URL Shortener de las Semanas 10 y 11 con la arquitectura aprendida
-esta semana: Typestate para URLs, Actor sharded para clicks, DI por traits.
+Refactoriza el URL Shortener de las Semanas 10–12 con la arquitectura aprendida
+esta semana: Newtype para los códigos, Typestate para el ciclo de vida de cada URL,
+un actor sharded para los clicks, DI por traits para el almacén y `figment` para la
+configuración. El código completo está en
+[`url_shortener_v4`](https://github.com/pepemxl/Rust-Notes/tree/master/src/chapter_05/url_shortener_v4).
+
+| Ruta | Respuesta |
+| :--- | :--- |
+| `POST /url` | `201` con el código; `400` si el código es inválido; `409` si ya existe |
+| `GET /{code}` | `307` al destino si la URL está activa; `404` si no existe o expiró |
+| `DELETE /{code}` | `204` al pasar la URL a `Expired`; `404` si no estaba activa |
+| `GET /admin/stats` | Total de URLs y clicks por código (leídos del actor) |
 
 ### Estructura
 
-```
-url_shortener_v3/
+```text
+url_shortener_v4/
 ├── Cargo.toml
-└── src/
-    ├── main.rs
-    ├── config.rs
-    ├── domain/
-    │   ├── mod.rs
-    │   └── url_entry.rs   ← Typestate
-    ├── actor/
-    │   ├── mod.rs
-    │   └── contador.rs    ← Actor sharded
-    ├── store/
-    │   ├── mod.rs
-    │   └── memoria.rs     ← impl AlmacenUrls en DashMap
-    └── api/
-        ├── mod.rs
-        ├── estado.rs      ← AppState
-        └── handlers.rs    ← Axum handlers
+├── src/
+│   ├── lib.rs             ← módulos + router()
+│   ├── main.rs            ← carga la config y arranca el servidor
+│   ├── config.rs          ← figment: defaults → config.toml → APP_*
+│   ├── domain/
+│   │   └── url_entry.rs   ← Newtype + Typestate
+│   ├── actor/
+│   │   └── contador.rs    ← actor sharded
+│   ├── store/
+│   │   └── memoria.rs     ← trait AlmacenUrls + impl con DashMap
+│   └── api/
+│       ├── estado.rs      ← AppState (DI dinámico)
+│       └── handlers.rs    ← handlers de Axum
+└── tests/
+    ├── typestate_test.rs
+    ├── actor_test.rs
+    └── api_test.rs
 ```
 
 ### `Cargo.toml`
 
 ```toml
-[package]
-name    = "url-shortener-v3"
-version = "0.1.0"
-edition = "2024"
+--8<-- "src/chapter_05/url_shortener_v4/Cargo.toml"
+```
 
-[dependencies]
-tokio        = { version = "1", features = ["full"] }
-axum         = "0.7"
-serde        = { version = "1", features = ["derive"] }
-serde_json   = "1"
-async-trait  = "0.1"
-dashmap      = "6"
-thiserror    = "2"
-anyhow       = "1"
-tracing      = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+### `src/lib.rs`
 
-[dev-dependencies]
-tokio-test  = "0.4"
+El `Router` vive en la librería, no en `main.rs`: así los tests de integración
+pueden construirlo y llamarlo sin abrir un puerto.
+
+```rust
+--8<-- "src/chapter_05/url_shortener_v4/src/lib.rs"
 ```
 
 ### `src/domain/url_entry.rs`
 
+Dos diferencias con los ejemplos de arriba. El campo de `UrlCode` es **privado**:
+fuera del módulo, la única forma de tener un `UrlCode` es `parse()`, así que tenerlo
+ya prueba que es válido. Y los ejemplos que no deben compilar son doctests
+` ```compile_fail `: `cargo test` falla si algún día **sí** compilan.
+
 ```rust
-use std::marker::PhantomData;
-use std::time::SystemTime;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct UrlCode(pub String);
-
-impl UrlCode {
-    pub fn nueva_aleatoria() -> Self {
-        use std::time::UNIX_EPOCH;
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
-        UrlCode(format!("{nanos:x}"))
-    }
-
-    pub fn parse(s: impl Into<String>) -> Result<Self, String> {
-        let s = s.into();
-        if s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-            && !s.is_empty()
-            && s.len() <= 32
-        {
-            Ok(UrlCode(s))
-        } else {
-            Err(format!("código de URL inválido: '{s}'"))
-        }
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for UrlCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-// ── Marcadores de estado ──────────────────────────────────────────────────
-// Debug hace falta porque #[derive(Debug)] en UrlEntry<S> exige S: Debug.
-
-#[derive(Debug)] pub struct Draft;
-#[derive(Debug)] pub struct Active;
-#[derive(Debug)] pub struct Expired;
-
-// ── Struct principal ──────────────────────────────────────────────────────
-
-#[derive(Debug)]
-pub struct UrlEntry<S> {
-    pub code:   UrlCode,
-    pub target: String,
-    pub clicks: u64,
-    _estado:    PhantomData<S>,
-}
-
-impl UrlEntry<Draft> {
-    pub fn nueva(code: UrlCode, target: impl Into<String>) -> Self {
-        UrlEntry { code, target: target.into(), clicks: 0, _estado: PhantomData }
-    }
-
-    pub fn publicar(self) -> UrlEntry<Active> {
-        UrlEntry { code: self.code, target: self.target, clicks: 0, _estado: PhantomData }
-    }
-}
-
-impl UrlEntry<Active> {
-    pub fn registrar_click(&mut self) {
-        self.clicks += 1;
-    }
-
-    pub fn url_destino(&self) -> &str {
-        &self.target
-    }
-
-    pub fn expirar(self) -> UrlEntry<Expired> {
-        UrlEntry { code: self.code, target: self.target, clicks: self.clicks, _estado: PhantomData }
-    }
-}
-
-impl UrlEntry<Expired> {
-    pub fn clicks_finales(&self) -> u64 {
-        self.clicks
-    }
-}
-
-impl<S> UrlEntry<S> {
-    pub fn codigo(&self) -> &UrlCode { &self.code }
-}
-
-// ── Tipo borrado para almacenamiento ─────────────────────────────────────
-
-#[derive(Debug)]
-pub enum EntradaUrl {
-    Draft(UrlEntry<Draft>),
-    Active(UrlEntry<Active>),
-    Expired(UrlEntry<Expired>),
-}
-
-impl EntradaUrl {
-    pub fn nueva_activa(code: UrlCode, target: impl Into<String>) -> Self {
-        let draft = UrlEntry::<Draft>::nueva(code, target);
-        EntradaUrl::Active(draft.publicar())
-    }
-
-    pub fn url_destino_activa(&self) -> Option<&str> {
-        match self {
-            EntradaUrl::Active(u) => Some(u.url_destino()),
-            _ => None,
-        }
-    }
-
-    pub fn registrar_click(&mut self) -> bool {
-        match self {
-            EntradaUrl::Active(u) => { u.registrar_click(); true }
-            _ => false,
-        }
-    }
-
-    pub fn expirar(self) -> Self {
-        match self {
-            EntradaUrl::Active(u) => EntradaUrl::Expired(u.expirar()),
-            otro => otro,
-        }
-    }
-
-    pub fn codigo(&self) -> &UrlCode {
-        match self {
-            EntradaUrl::Draft(u)   => u.codigo(),
-            EntradaUrl::Active(u)  => u.codigo(),
-            EntradaUrl::Expired(u) => u.codigo(),
-        }
-    }
-
-    pub fn clicks(&self) -> u64 {
-        match self {
-            EntradaUrl::Draft(u)   => u.clicks,
-            EntradaUrl::Active(u)  => u.clicks,
-            EntradaUrl::Expired(u) => u.clicks,
-        }
-    }
-}
+--8<-- "src/chapter_05/url_shortener_v4/src/domain/url_entry.rs"
 ```
 
 ### `src/actor/contador.rs`
 
+`ContadorHandle` y el protocolo `Mensaje` son privados; el resto del sistema solo ve
+`ContadorSharded`. Como cada código va siempre al mismo shard, cada conteo vive en un
+solo actor y `snapshot()` puede unir los mapas con `extend` sin sumar.
+
 ```rust
-use crate::domain::url_entry::UrlCode;
-use std::collections::HashMap;
-use tokio::sync::{mpsc, oneshot};
-
-enum Mensaje {
-    Incrementar(UrlCode),
-    Obtener { codigo: UrlCode, tx: oneshot::Sender<u64> },
-    Snapshot(oneshot::Sender<HashMap<String, u64>>),
-}
-
-struct ContadorInterno {
-    conteos: HashMap<String, u64>,
-    rx:      mpsc::Receiver<Mensaje>,
-}
-
-impl ContadorInterno {
-    async fn ejecutar(mut self) {
-        while let Some(msg) = self.rx.recv().await {
-            match msg {
-                Mensaje::Incrementar(code) => {
-                    *self.conteos.entry(code.0).or_default() += 1;
-                }
-                Mensaje::Obtener { codigo, tx } => {
-                    let n = self.conteos.get(&codigo.0).copied().unwrap_or(0);
-                    let _ = tx.send(n);
-                }
-                Mensaje::Snapshot(tx) => {
-                    let _ = tx.send(self.conteos.clone());
-                }
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct ContadorHandle {
-    tx: mpsc::Sender<Mensaje>,
-}
-
-impl ContadorHandle {
-    fn iniciar() -> Self {
-        let (tx, rx) = mpsc::channel(512);
-        let actor = ContadorInterno { conteos: HashMap::new(), rx };
-        tokio::spawn(actor.ejecutar());
-        ContadorHandle { tx }
-    }
-
-    async fn incrementar(&self, code: UrlCode) {
-        let _ = self.tx.send(Mensaje::Incrementar(code)).await;
-    }
-
-    async fn obtener(&self, codigo: &UrlCode) -> u64 {
-        let (tx, rx) = oneshot::channel();
-        let _ = self.tx.send(Mensaje::Obtener { codigo: codigo.clone(), tx }).await;
-        rx.await.unwrap_or(0)
-    }
-}
-
-// ── Sharded: N actores para alta concurrencia ─────────────────────────────
-
-#[derive(Clone)]
-pub struct ContadorSharded {
-    shards: Vec<ContadorHandle>,
-}
-
-impl ContadorSharded {
-    pub fn iniciar(n: usize) -> Self {
-        let shards = (0..n.max(1)).map(|_| ContadorHandle::iniciar()).collect();
-        ContadorSharded { shards }
-    }
-
-    fn shard(&self, code: &UrlCode) -> &ContadorHandle {
-        let h = code.0.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
-        &self.shards[(h as usize) % self.shards.len()]
-    }
-
-    pub async fn incrementar(&self, code: UrlCode) {
-        self.shard(&code).incrementar(code).await;
-    }
-
-    pub async fn obtener(&self, codigo: &UrlCode) -> u64 {
-        self.shard(codigo).obtener(codigo).await
-    }
-
-    pub async fn snapshot(&self) -> HashMap<String, u64> {
-        let mut total = HashMap::new();
-        for shard in &self.shards {
-            let (tx, rx) = oneshot::channel();
-            let _ = shard.tx.send(Mensaje::Snapshot(tx)).await;
-            if let Ok(mapa) = rx.await {
-                for (k, v) in mapa {
-                    *total.entry(k).or_default() += v;
-                }
-            }
-        }
-        total
-    }
-}
+--8<-- "src/chapter_05/url_shortener_v4/src/actor/contador.rs"
 ```
 
 ### `src/store/memoria.rs`
 
+`EntradaUrl` es `Clone`, así que `obtener` devuelve una copia en lugar de mantener
+bloqueado un shard del `DashMap`. Las operaciones que leen y escriben
+(`guardar`, `registrar_click`, `expirar`) lo hacen bajo **un solo** guard, para que
+otra petición no pueda colarse entre la comprobación y el cambio.
+
 ```rust
-use crate::domain::url_entry::{EntradaUrl, UrlCode};
-use async_trait::async_trait;
-use dashmap::DashMap;
-use std::sync::Arc;
-
-// `async-trait` sigue siendo necesario aquí porque usamos `Arc<dyn AlmacenUrls>`:
-// los `async fn` nativos en traits (Rust 1.75+) aún no son dyn-compatibles.
-// Si solo usaras generics, bastaría con `async fn` nativo sin el atributo.
-#[async_trait]
-pub trait AlmacenUrls: Send + Sync {
-    async fn guardar(&self, url: EntradaUrl) -> Result<(), String>;
-    async fn obtener(&self, code: &UrlCode) -> Option<EntradaUrl>;
-    async fn registrar_click(&self, code: &UrlCode) -> bool;
-    async fn total_urls(&self) -> usize;
-}
-
-#[derive(Clone, Default)]
-pub struct AlmacenMemoria {
-    mapa: Arc<DashMap<String, EntradaUrl>>,
-}
-
-#[async_trait]
-impl AlmacenUrls for AlmacenMemoria {
-    async fn guardar(&self, url: EntradaUrl) -> Result<(), String> {
-        let code = url.codigo().0.clone();
-        if self.mapa.contains_key(&code) {
-            return Err(format!("código '{code}' ya existe"));
-        }
-        self.mapa.insert(code, url);
-        Ok(())
-    }
-
-    async fn obtener(&self, code: &UrlCode) -> Option<EntradaUrl> {
-        // Nota: no podemos devolver referencia al interior de DashMap fácilmente
-        // sin clonar, así que definimos clone en EntradaUrl o usamos Ref guard.
-        // Para simplificar, tomamos el valor y lo re-insertamos.
-        // En producción usaríamos Arc<RwLock<EntradaUrl>> o Ref guard.
-        self.mapa.get(&code.0).map(|r| {
-            let e = r.value();
-            // Construcción espejo (sin clone en traits, usamos helper)
-            match e {
-                EntradaUrl::Active(u) => {
-                    EntradaUrl::nueva_activa(u.code.clone(), u.target.clone())
-                }
-                _ => EntradaUrl::nueva_activa(
-                    e.codigo().clone(),
-                    "expired".to_string(),
-                ),
-            }
-        })
-    }
-
-    async fn registrar_click(&self, code: &UrlCode) -> bool {
-        if let Some(mut entrada) = self.mapa.get_mut(&code.0) {
-            entrada.registrar_click()
-        } else {
-            false
-        }
-    }
-
-    async fn total_urls(&self) -> usize {
-        self.mapa.len()
-    }
-}
+--8<-- "src/chapter_05/url_shortener_v4/src/store/memoria.rs"
 ```
 
-### `src/api/handlers.rs`
+### `src/api/estado.rs` y `src/api/handlers.rs`
 
 ```rust
-use crate::{actor::contador::ContadorSharded, domain::url_entry::UrlCode};
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Redirect},
-};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+--8<-- "src/chapter_05/url_shortener_v4/src/api/estado.rs"
+```
 
-use super::super::store::memoria::AlmacenUrls;
+```rust
+--8<-- "src/chapter_05/url_shortener_v4/src/api/handlers.rs"
+```
 
-#[derive(Clone)]
-pub struct AppState {
-    pub almacen: Arc<dyn AlmacenUrls>,
-    pub contador: ContadorSharded,
-}
+### `src/config.rs`
 
-#[derive(Deserialize)]
-pub struct CrearUrlRequest {
-    pub target:  String,
-    pub code:    Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct CrearUrlResponse {
-    pub code:       String,
-    pub short_url:  String,
-}
-
-pub async fn crear_url(
-    State(state): State<AppState>,
-    Json(body): Json<CrearUrlRequest>,
-) -> impl IntoResponse {
-    use crate::domain::url_entry::{EntradaUrl, UrlCode};
-
-    let code = match body.code {
-        Some(c) => match UrlCode::parse(c) {
-            Ok(c) => c,
-            Err(e) => return (StatusCode::BAD_REQUEST, e).into_response(),
-        },
-        None => UrlCode::nueva_aleatoria(),
-    };
-
-    let entrada = EntradaUrl::nueva_activa(code.clone(), &body.target);
-
-    match state.almacen.guardar(entrada).await {
-        Ok(_) => Json(CrearUrlResponse {
-            short_url: format!("http://localhost:8080/{}", code.as_str()),
-            code:      code.0,
-        }).into_response(),
-        Err(e) => (StatusCode::CONFLICT, e).into_response(),
-    }
-}
-
-pub async fn redirigir(
-    State(state): State<AppState>,
-    Path(code): Path<String>,
-) -> impl IntoResponse {
-    let Ok(url_code) = UrlCode::parse(&code) else {
-        return StatusCode::BAD_REQUEST.into_response();
-    };
-
-    // Registrar click en el almacen y en el actor sharded
-    let hubo_click = state.almacen.registrar_click(&url_code).await;
-
-    if !hubo_click {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-
-    state.contador.incrementar(url_code.clone()).await;
-
-    // Obtener URL destino
-    match state.almacen.obtener(&url_code).await {
-        Some(entrada) if entrada.url_destino_activa().is_some() => {
-            Redirect::temporary(entrada.url_destino_activa().unwrap()).into_response()
-        }
-        _ => StatusCode::NOT_FOUND.into_response(),
-    }
-}
-
-pub async fn estadisticas(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    let total_urls  = state.almacen.total_urls().await;
-    let conteos     = state.contador.snapshot().await;
-
-    Json(serde_json::json!({
-        "total_urls":  total_urls,
-        "top_clicks":  conteos,
-    }))
-}
+```rust
+--8<-- "src/chapter_05/url_shortener_v4/src/config.rs"
 ```
 
 ### `src/main.rs`
 
 ```rust
-mod actor;
-mod api;
-mod domain;
-mod store;
-
-use actor::contador::ContadorSharded;
-use api::handlers::{AppState, crear_url, estadisticas, redirigir};
-use store::memoria::AlmacenMemoria;
-
-use axum::{Router, routing::{get, post}};
-use std::sync::Arc;
-use tracing_subscriber::EnvFilter;
-
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
-    let almacen = Arc::new(AlmacenMemoria::default());
-    let contador = ContadorSharded::iniciar(16);  // 16 shards
-
-    let estado = AppState { almacen, contador };
-
-    let app = Router::new()
-        .route("/url", post(crear_url))
-        .route("/{code}", get(redirigir))
-        .route("/admin/stats", get(estadisticas))
-        .with_state(estado);
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
-    tracing::info!("URL Shortener v3 escuchando en :8080");
-    axum::serve(listener, app).await.unwrap();
-}
+--8<-- "src/chapter_05/url_shortener_v4/src/main.rs"
 ```
+
+### Probarlo
+
+```bash
+cargo run                                   # o: APP_PORT=9090 APP_ACTOR_SHARDS=32 cargo run
+
+curl -X POST localhost:8080/url -H 'content-type: application/json' \
+     -d '{"target":"https://www.rust-lang.org","code":"rust"}'
+curl -i localhost:8080/rust                 # redirige y cuenta el click
+curl -X DELETE localhost:8080/rust          # Active → Expired
+curl localhost:8080/admin/stats
+```
+
+```text
+{"code":"rust","short_url":"http://localhost:8080/rust"}
+
+HTTP/1.1 307 Temporary Redirect
+location: https://www.rust-lang.org
+content-length: 0
+
+{"clicks":{"rust":1},"total_urls":1}
+```
+
+Repetir el `POST` devuelve `409` con `el código 'rust' ya existe`, y después del
+`DELETE` el `GET /rust` responde `404`: la URL sigue guardada (cuenta en
+`total_urls`), pero en estado `Expired` ya no tiene destino.
 
 ---
 
 ## Tests
 
+`tests/typestate_test.rs` prueba el dominio sin runtime async:
+
 ```rust
-// tests/typestate_test.rs
-use url_shortener_v3::domain::url_entry::{
-    Active, Draft, EntradaUrl, Expired, UrlCode, UrlEntry,
-};
+--8<-- "src/chapter_05/url_shortener_v4/tests/typestate_test.rs"
+```
 
-#[test]
-fn ciclo_de_vida_completo() {
-    let code   = UrlCode::parse("mi-url").unwrap();
-    let draft  = UrlEntry::<Draft>::nueva(code.clone(), "https://ejemplo.com");
+`tests/actor_test.rs` necesita Tokio (`#[tokio::test]`) porque el actor es una tarea:
 
-    // Draft → Active
-    let mut activa = draft.publicar();
-    assert_eq!(activa.clicks, 0);
-    assert_eq!(activa.url_destino(), "https://ejemplo.com");
+```rust
+--8<-- "src/chapter_05/url_shortener_v4/tests/actor_test.rs"
+```
 
-    // Active: registrar clicks
-    activa.registrar_click();
-    activa.registrar_click();
-    activa.registrar_click();
-    assert_eq!(activa.clicks, 3);
+`tests/api_test.rs` recorre la API completa con `tower::ServiceExt::oneshot`, que
+llama al `Router` como a una función: sin puerto, sin `reqwest`, sin servidor.
 
-    // Active → Expired
-    let expirada = activa.expirar();
-    assert_eq!(expirada.clicks_finales(), 3);
-}
-
-#[test]
-fn tamanos_iguales_por_phantomdata() {
-    use std::mem::size_of;
-    assert_eq!(size_of::<UrlEntry<Draft>>(), size_of::<UrlEntry<Active>>());
-    assert_eq!(size_of::<UrlEntry<Active>>(), size_of::<UrlEntry<Expired>>());
-}
-
-#[test]
-fn tipo_borrado_registra_clicks() {
-    let code   = UrlCode::parse("abc").unwrap();
-    let mut e  = EntradaUrl::nueva_activa(code, "https://ejemplo.com");
-
-    assert!(e.registrar_click());   // activa: OK
-    assert_eq!(e.clicks(), 1);
-
-    let expirada = e.expirar();
-    // ya no es activa → registrar_click devuelve false
-    // (no podemos mutar expirada.registrar_click() para probar false sin convertir)
-    assert!(expirada.url_destino_activa().is_none());
-}
-
-#[test]
-fn url_code_valida_caracteres() {
-    assert!(UrlCode::parse("hola-mundo_123").is_ok());
-    assert!(UrlCode::parse("").is_err());
-    assert!(UrlCode::parse("url con espacio").is_err());
-    assert!(UrlCode::parse("url/slash").is_err());
-}
-
-// tests/actor_test.rs
-#[tokio::test]
-async fn actor_sharded_contadores_correctos() {
-    use url_shortener_v3::actor::contador::ContadorSharded;
-    use url_shortener_v3::domain::url_entry::UrlCode;
-
-    let contador = ContadorSharded::iniciar(4);
-    let code_a   = UrlCode::parse("url-a").unwrap();
-    let code_b   = UrlCode::parse("url-b").unwrap();
-
-    // Incrementar desde múltiples tareas concurrentes
-    let mut tareas = Vec::new();
-    for _ in 0..10 {
-        let c   = contador.clone();
-        let ca  = code_a.clone();
-        let cb  = code_b.clone();
-        tareas.push(tokio::spawn(async move {
-            c.incrementar(ca).await;
-            c.incrementar(cb).await;
-            c.incrementar(cb).await;
-        }));
-    }
-    for t in tareas { t.await.unwrap(); }
-
-    assert_eq!(contador.obtener(&code_a).await, 10);
-    assert_eq!(contador.obtener(&code_b).await, 20);
-}
-
-#[tokio::test]
-async fn snapshot_agrega_todos_los_shards() {
-    use url_shortener_v3::actor::contador::ContadorSharded;
-    use url_shortener_v3::domain::url_entry::UrlCode;
-
-    let contador = ContadorSharded::iniciar(8);
-    let codes: Vec<_> = (0..8)
-        .map(|i| UrlCode::parse(format!("url-{i}")).unwrap())
-        .collect();
-
-    for code in &codes {
-        contador.incrementar(code.clone()).await;
-        contador.incrementar(code.clone()).await;
-    }
-
-    let snap = contador.snapshot().await;
-    let total: u64 = snap.values().sum();
-    assert_eq!(total, 16);  // 8 URLs × 2 clicks cada una
-}
+```rust
+--8<-- "src/chapter_05/url_shortener_v4/tests/api_test.rs"
 ```
 
 ---
 
 ## Errores de compilación que el Typestate previene
 
+Esto es lo que responde el compilador (Rust 1.96) si intentas usar un estado de forma
+inválida desde un binario que depende de la librería:
+
+```rust
+// ❌ NO COMPILA
+use url_shortener_v4::domain::url_entry::{UrlCode, UrlEntry};
+
+fn main() {
+    let code = UrlCode::parse("abc").unwrap();
+    let mut draft = UrlEntry::nueva(code, "https://ejemplo.com");
+    draft.registrar_click();
+
+    let activa = draft.publicar();
+    activa.publicar();
+}
+```
+
+Los dos errores son el mismo `E0599`: el método existe, pero para **otro** estado, y
+la nota lo dice:
+
 ```text
-error[E0599]: no method named `registrar_click` found for struct
-              `UrlEntry<Draft>` in the current scope
-  --> src/main.rs:42:13
-   |
-42 |     draft.registrar_click();
-   |           ^^^^^^^^^^^^^^^ method not found in `UrlEntry<Draft>`
-   |
-   = note: the method exists for `UrlEntry<Active>` but not for `UrlEntry<Draft>`
+error[E0599]: no method named `registrar_click` found for struct `UrlEntry<url_shortener_v4::domain::url_entry::Draft>` in the current scope
+ --> src/main.rs:6:11
+  |
+6 |     draft.registrar_click();
+  |           ^^^^^^^^^^^^^^^ method not found in `UrlEntry<url_shortener_v4::domain::url_entry::Draft>`
+  |
+  = note: the method was found for `UrlEntry<url_shortener_v4::domain::url_entry::Active>`
 
-error[E0599]: no method named `publicar` found for struct
-              `UrlEntry<Active>` in the current scope
-  --> src/main.rs:48:14
-   |
-48 |     activa.publicar();
-   |            ^^^^^^^^ method not found in `UrlEntry<Active>`
+error[E0599]: no method named `publicar` found for struct `UrlEntry<url_shortener_v4::domain::url_entry::Active>` in the current scope
+ --> src/main.rs:9:12
+  |
+9 |     activa.publicar();
+  |            ^^^^^^^^ method not found in `UrlEntry<url_shortener_v4::domain::url_entry::Active>`
+  |
+  = note: the method was found for `UrlEntry<url_shortener_v4::domain::url_entry::Draft>`
+```
 
+Publicar dos veces el mismo `Draft` lo detecta el borrow checker: `publicar(self)`
+consume el valor.
+
+```rust
+// ❌ NO COMPILA
+use url_shortener_v4::domain::url_entry::{UrlCode, UrlEntry};
+
+fn main() {
+    let code = UrlCode::parse("abc").unwrap();
+    let draft = UrlEntry::nueva(code, "https://ejemplo.com");
+    let _activa = draft.publicar();
+    let _otra = draft.publicar();
+}
+```
+
+```text
 error[E0382]: use of moved value: `draft`
-  --> src/main.rs:51:5
-   |
-45 |     let activa = draft.publicar();
-   |                        --------- value moved here
-51 |     draft.publicar();
-   |     ^^^^^ value used here after move
-   |
-   = help: `publicar` consumes `self`, no hay segunda publicación
+ --> src/main.rs:7:17
+  |
+5 |     let draft = UrlEntry::nueva(code, "https://ejemplo.com");
+  |         ----- move occurs because `draft` has type `UrlEntry<url_shortener_v4::domain::url_entry::Draft>`, which does not implement the `Copy` trait
+6 |     let _activa = draft.publicar();
+  |                         ---------- `draft` moved due to this method call
+7 |     let _otra = draft.publicar();
+  |                 ^^^^^ value used here after move
 ```
 
 ---
@@ -1423,7 +1001,8 @@ error[E0382]: use of moved value: `draft`
   código de URL. Elijo N basándome en el número de núcleos, no un valor arbitrario.
 - [ ] DI estático (generics) en el núcleo de negocio; DI dinámico (`Arc<dyn Trait>`)
   en el estado de Axum para facilitar tests con mocks.
-- [ ] `cargo test` pasa los 7 tests (5 de typestate + 2 de actor).
+- [ ] `cargo test` pasa los 8 tests (4 de typestate, 2 del actor, 2 de la API) y los
+  2 doctests `compile_fail`.
 
 !!! abstract "Siguiente sección"
 

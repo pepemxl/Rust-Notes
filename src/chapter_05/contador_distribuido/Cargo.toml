@@ -1,0 +1,18 @@
+[package]
+name = "contador_distribuido"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+parking_lot = "0.12"
+crossbeam   = "0.8"
+dashmap     = "6"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name    = "counter_bench"
+harness = false

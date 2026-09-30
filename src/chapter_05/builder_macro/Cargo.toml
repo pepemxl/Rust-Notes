@@ -1,0 +1,14 @@
+[package]
+name = "builder_macro"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+publish = false
+
+[lib]
+proc-macro = true # CLAVE: este crate es un plugin del compilador
+
+[dependencies]
+syn         = { version = "2", features = ["full"] }
+quote       = "1"
+proc-macro2 = "1"

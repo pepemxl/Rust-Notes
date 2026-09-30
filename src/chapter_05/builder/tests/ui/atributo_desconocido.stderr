@@ -1,0 +1,5 @@
+error: atributo builder desconocido; se esperaba `default` o `each`
+ --> tests/ui/atributo_desconocido.rs:5:15
+  |
+5 |     #[builder(atributo_inventado)]
+  |               ^^^^^^^^^^^^^^^^^^
